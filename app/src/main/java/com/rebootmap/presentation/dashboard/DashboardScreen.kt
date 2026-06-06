@@ -14,12 +14,18 @@ import androidx.compose.material.icons.outlined.Paid
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Payments
 import androidx.compose.material.icons.outlined.Savings
+import androidx.compose.material.icons.outlined.RealEstateAgent
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.TrendingUp
+import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Work
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -28,6 +34,9 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -36,12 +45,15 @@ import com.rebootmap.domain.model.Asset
 import com.rebootmap.presentation.chart.CashFlowChartCard
 import com.rebootmap.presentation.components.ExitConfirmBackHandler
 import com.rebootmap.presentation.components.ExpandableCard
+import com.rebootmap.presentation.components.ResetInputsConfirmDialog
 import com.rebootmap.presentation.components.InvestmentReturnRate
 import com.rebootmap.presentation.components.InvestmentReturnSlider
 import com.rebootmap.presentation.components.IntInputField
 import com.rebootmap.presentation.components.ManWonInputField
 import com.rebootmap.presentation.components.PercentInputField
 import com.rebootmap.presentation.simulation.AssetCardFields
+import com.rebootmap.presentation.simulation.PresetHints
+import com.rebootmap.presentation.simulation.RelocationScenarioCard
 import com.rebootmap.presentation.simulation.ResultSummaryCard
 import com.rebootmap.presentation.simulation.SimulationViewModel
 import com.rebootmap.presentation.simulation.displayTitle
@@ -51,8 +63,20 @@ import com.rebootmap.presentation.simulation.summaryText
 @Composable
 fun DashboardScreen(viewModel: SimulationViewModel) {
     val state by viewModel.uiState.collectAsState()
+    var showMenu by remember { mutableStateOf(false) }
+    var showResetDialog by remember { mutableStateOf(false) }
 
     ExitConfirmBackHandler()
+
+    if (showResetDialog) {
+        ResetInputsConfirmDialog(
+            onConfirm = {
+                showResetDialog = false
+                viewModel.resetAllInputs()
+            },
+            onDismiss = { showResetDialog = false },
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -63,7 +87,28 @@ fun DashboardScreen(viewModel: SimulationViewModel) {
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primary,
                     titleContentColor = MaterialTheme.colorScheme.onPrimary,
+                    actionIconContentColor = MaterialTheme.colorScheme.onPrimary,
                 ),
+                actions = {
+                    IconButton(onClick = { showMenu = true }) {
+                        Icon(
+                            imageVector = Icons.Outlined.MoreVert,
+                            contentDescription = "메뉴",
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = showMenu,
+                        onDismissRequest = { showMenu = false },
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("입력 정보 초기화") },
+                            onClick = {
+                                showMenu = false
+                                showResetDialog = true
+                            },
+                        )
+                    }
+                },
             )
         },
     ) { padding ->
@@ -86,11 +131,26 @@ fun DashboardScreen(viewModel: SimulationViewModel) {
                     CashFlowChartCard(
                         projection = projection,
                         retirementAge = state.profile.retirementAge,
+                        baselineProjection = state.baselineProjection.takeIf { state.showComparison },
                     )
                 }
             }
 
-            state.investmentAsset?.let { investment ->
+            item {
+                val saleYear = state.assets
+                    .filterIsInstance<Asset.RealEstate>()
+                    .firstOrNull()
+                    ?.saleYear
+                RelocationScenarioCard(
+                    plan = state.relocationPlan,
+                    saleYear = saleYear,
+                    expanded = state.isRelocationExpanded,
+                    onToggle = viewModel::toggleRelocationExpanded,
+                    onPlanChange = viewModel::updateRelocationPlan,
+                )
+            }
+
+            state.investmentAsset?.takeIf { it.currentValue > 0 }?.let { investment ->
                 item {
                     InvestmentSliderCard(
                         returnRate = investment.annualReturnRate,
@@ -112,7 +172,7 @@ fun DashboardScreen(viewModel: SimulationViewModel) {
                         value = state.profile.currentAge,
                         onValueChange = { viewModel.updateCurrentAge(it) },
                         onCommit = { viewModel.commitCurrentAge(it) },
-                        supportingText = "입력 완료 후 통계 기반 평균값이 적용됩니다 (18~100세)",
+                        supportingText = "입력 완료 시 연령대별 참고값이 갱신됩니다 (18~100세)",
                     )
                     if (state.presetSourceNote.isNotEmpty()) {
                         Text(
@@ -138,6 +198,9 @@ fun DashboardScreen(viewModel: SimulationViewModel) {
                                 state.profile.copy(lifeExpectancy = age),
                             )
                         },
+                        supportingText = state.referencePreset?.profile?.lifeExpectancy?.let {
+                            PresetHints.age(it)
+                        },
                     )
                     ManWonInputField(
                         label = "목표 월 생활비",
@@ -159,11 +222,15 @@ fun DashboardScreen(viewModel: SimulationViewModel) {
                                 state.assumptions.copy(inflationRate = rate.coerceIn(0.0, 0.2)),
                             )
                         },
+                        supportingText = state.referencePreset?.assumptions?.inflationRate?.let {
+                            PresetHints.percent(it)
+                        },
                     )
                 }
             }
 
             itemsIndexed(state.assets) { index, asset ->
+                val referenceAsset = state.referencePreset?.assets?.getOrNull(index)
                 ExpandableCard(
                     title = asset.displayTitle(),
                     summary = asset.summaryText(),
@@ -173,6 +240,7 @@ fun DashboardScreen(viewModel: SimulationViewModel) {
                 ) {
                     AssetCardFields(
                         asset = asset,
+                        referenceAsset = referenceAsset,
                         onAssetChange = { updated -> viewModel.updateAsset(index, updated) },
                     )
                 }
@@ -229,4 +297,5 @@ private fun Asset.icon(): ImageVector = when (this) {
     is Asset.Investment -> Icons.Outlined.TrendingUp
     is Asset.CashSavings -> Icons.Outlined.Savings
     is Asset.FixedIncome -> Icons.Outlined.Paid
+    is Asset.HousingPension -> Icons.Outlined.RealEstateAgent
 }

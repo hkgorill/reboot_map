@@ -1,5 +1,7 @@
 package com.rebootmap.domain.model
 
+import com.rebootmap.domain.scenario.RelocationPlan
+
 data class YearSnapshot(
     val year: Int,
     val age: Int,
@@ -50,11 +52,16 @@ data class CashFlowProjection(
 
     fun yearSpanSummary(years: List<Int>): YearSpanSummary {
         if (years.isEmpty()) return YearSpanSummary(headline = "없음", rangeLine = null)
-        val first = yearlySnapshots.first { it.year == years.first() }
-        val last = yearlySnapshots.first { it.year == years.last() }
+        val firstYear = years.first()
+        val lastYear = years.last()
+        val first = yearlySnapshots.firstOrNull { it.year == firstYear }
+        val last = yearlySnapshots.firstOrNull { it.year == lastYear }
+        if (first == null || last == null) {
+            return YearSpanSummary(headline = "${years.size}년", rangeLine = "($firstYear~$lastYear)")
+        }
         return YearSpanSummary(
             headline = "${years.size}년 · ${first.age}~${last.age}세",
-            rangeLine = "(${years.first()}~${years.last()})",
+            rangeLine = "($firstYear~$lastYear)",
         )
     }
 }
@@ -69,4 +76,5 @@ data class SimulationInput(
     val assumptions: EconomicAssumptions,
     val assets: List<Asset>,
     val startYear: Int,
+    val relocationPlan: RelocationPlan? = null,
 )

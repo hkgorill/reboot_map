@@ -12,7 +12,11 @@ data class UserProfile(
         return copy(
             currentAge = safeCurrentAge,
             retirementAge = safeRetirementAge,
-            lifeExpectancy = lifeExpectancy.coerceIn(safeCurrentAge, 100),
+            lifeExpectancy = if (lifeExpectancy <= 0) {
+                0
+            } else {
+                lifeExpectancy.coerceIn(safeCurrentAge, 100)
+            },
             monthlyLivingExpense = monthlyLivingExpense.coerceAtLeast(0L),
         )
     }

@@ -1,5 +1,8 @@
 package com.rebootmap.presentation.chart
 
+import android.graphics.Paint
+import android.graphics.Typeface
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -22,7 +25,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -37,6 +46,7 @@ import com.patrykandpatrick.vico.core.entry.ChartEntryModelProducer
 import com.patrykandpatrick.vico.core.entry.entryOf
 import com.rebootmap.domain.model.CashFlowProjection
 import com.rebootmap.domain.model.YearSnapshot
+import com.rebootmap.presentation.theme.AccentCoral
 import com.rebootmap.presentation.theme.PrimaryBlue
 import com.rebootmap.presentation.theme.SuccessGreen
 import com.rebootmap.presentation.theme.TextSecondary
@@ -52,6 +62,7 @@ private enum class TimelineSegment {
 fun CashFlowChartCard(
     projection: CashFlowProjection,
     retirementAge: Int,
+    baselineProjection: CashFlowProjection? = null,
     modifier: Modifier = Modifier,
 ) {
     val snapshots = projection.yearlySnapshots
@@ -59,14 +70,23 @@ fun CashFlowChartCard(
 
     val assetDeclineYearSet = projection.assetDeclineYears(retirementAge).toSet()
     val incomeDeficitYearSet = projection.deficitYears.toSet()
-    val modelProducer = remember { ChartEntryModelProducer() }
+    val baselineSnapshots = baselineProjection?.yearlySnapshots.orEmpty()
+    val showComparison = baselineSnapshots.isNotEmpty()
+    val scenariosDiffer = showComparison && snapshots.indices.any { index ->
+        index < baselineSnapshots.size &&
+            snapshots[index].endingBalance != baselineSnapshots[index].endingBalance
+    }
+    val chartKey = remember(projection, baselineProjection) {
+        projection.yearlySnapshots.hashCode() to baselineProjection?.yearlySnapshots.hashCode()
+    }
+    val modelProducer = remember(chartKey) { ChartEntryModelProducer() }
 
-    LaunchedEffect(projection) {
-        modelProducer.setEntries(
-            snapshots.mapIndexed { index, snapshot ->
-                entryOf(index.toFloat(), snapshot.endingBalance / 10_000f)
-            },
-        )
+    LaunchedEffect(chartKey) {
+        if (showComparison) return@LaunchedEffect
+        val entries = snapshots.mapIndexed { index, snapshot ->
+            entryOf(index.toFloat(), snapshot.endingBalance / 10_000f)
+        }
+        modelProducer.setEntriesSuspending(entries)
     }
 
     Card(
@@ -79,42 +99,67 @@ fun CashFlowChartCard(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text(
-                text = "연도별 자산 추이",
+                text = if (showComparison) "시나리오 A/B 비교" else "연도별 자산 추이",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
             )
             Text(
-                text = "가로축 = 나이(세) · 세로축 = 총자산(만원)",
+                text = if (showComparison) {
+                    "주황(●) = A 현재 유지 · 파란 실선 = B 거주지 이동"
+                } else {
+                    "가로축 = 나이(세) · 세로축 = 총자산(만원)"
+                },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
-            ProvideChartStyle {
-                Chart(
-                    chart = lineChart(
-                        lines = listOf(
-                            LineChart.LineSpec(
-                                lineColor = PrimaryBlue.toArgb(),
-                                pointSizeDp = 6f,
-                            ),
-                        ),
-                        spacing = 4.dp,
-                    ),
-                    chartModelProducer = modelProducer,
-                    startAxis = rememberStartAxis(
-                        title = "만원",
-                        valueFormatter = { value, _ -> formatChartManAxis(value) },
-                    ),
-                    bottomAxis = rememberBottomAxis(
-                        valueFormatter = { value, _ ->
-                            snapshots.getOrNull(value.toInt())?.let { "${it.age}세" } ?: ""
-                        },
-                    ),
-                    chartScrollState = rememberChartScrollState(),
+            if (showComparison) {
+                ComparisonLegend()
+                if (!scenariosDiffer) {
+                    Text(
+                        text = "두 시나리오 결과가 동일합니다. 신규 주택 시세·구입 시점을 확인하세요.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.tertiary,
+                    )
+                }
+            }
+
+            if (showComparison) {
+                ComparisonCashFlowChart(
+                    maintainSnapshots = baselineSnapshots,
+                    relocationSnapshots = snapshots,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(220.dp),
                 )
+            } else {
+                ProvideChartStyle {
+                    Chart(
+                        chart = lineChart(
+                            lines = listOf(
+                                LineChart.LineSpec(
+                                    lineColor = PrimaryBlue.toArgb(),
+                                    pointSizeDp = 6f,
+                                ),
+                            ),
+                            spacing = 4.dp,
+                        ),
+                        chartModelProducer = modelProducer,
+                        startAxis = rememberStartAxis(
+                            title = "만원",
+                            valueFormatter = { value, _ -> formatChartManAxis(value) },
+                        ),
+                        bottomAxis = rememberBottomAxis(
+                            valueFormatter = { value, _ ->
+                                snapshots.getOrNull(value.toInt())?.let { "${it.age}세" } ?: ""
+                            },
+                        ),
+                        chartScrollState = rememberChartScrollState(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(220.dp),
+                    )
+                }
             }
 
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -125,6 +170,138 @@ fun CashFlowChartCard(
                 assetDeclineYearSet = assetDeclineYearSet,
                 incomeDeficitYearSet = incomeDeficitYearSet,
                 retirementAge = retirementAge,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ComparisonCashFlowChart(
+    maintainSnapshots: List<YearSnapshot>,
+    relocationSnapshots: List<YearSnapshot>,
+    modifier: Modifier = Modifier,
+) {
+    val gridColor = MaterialTheme.colorScheme.outlineVariant
+    val axisLabelColor = MaterialTheme.colorScheme.onSurfaceVariant
+
+    Canvas(modifier = modifier) {
+        val count = minOf(maintainSnapshots.size, relocationSnapshots.size)
+        if (count == 0) return@Canvas
+
+        val maintainValues = maintainSnapshots.take(count).map { it.endingBalance / 10_000f }
+        val relocationValues = relocationSnapshots.take(count).map { it.endingBalance / 10_000f }
+        val allValues = maintainValues + relocationValues
+        val minValue = minOf(0f, allValues.minOrNull() ?: 0f)
+        val maxValue = maxOf(0f, allValues.maxOrNull() ?: 0f)
+        val range = (maxValue - minValue).takeIf { it > 0f } ?: 1f
+
+        val leftPadding = 42.dp.toPx()
+        val rightPadding = 8.dp.toPx()
+        val topPadding = 8.dp.toPx()
+        val bottomPadding = 22.dp.toPx()
+        val chartWidth = size.width - leftPadding - rightPadding
+        val chartHeight = size.height - topPadding - bottomPadding
+
+        fun xAt(index: Int): Float =
+            leftPadding + if (count == 1) 0f else chartWidth * index / (count - 1)
+
+        fun yAt(value: Float): Float =
+            topPadding + (maxValue - value) / range * chartHeight
+
+        val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = axisLabelColor.toArgb()
+            textSize = 11.dp.toPx()
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
+        }
+
+        val horizontalLines = 5
+        repeat(horizontalLines + 1) { step ->
+            val fraction = step / horizontalLines.toFloat()
+            val y = topPadding + chartHeight * fraction
+            val value = maxValue - range * fraction
+            drawLine(
+                color = gridColor,
+                start = Offset(leftPadding, y),
+                end = Offset(leftPadding + chartWidth, y),
+                strokeWidth = 1.dp.toPx(),
+            )
+            drawContext.canvas.nativeCanvas.drawText(
+                formatChartManAxis(value),
+                0f,
+                y + 4.dp.toPx(),
+                textPaint,
+            )
+        }
+
+        val verticalLines = 10
+        repeat(verticalLines + 1) { step ->
+            val x = leftPadding + chartWidth * step / verticalLines
+            drawLine(
+                color = gridColor.copy(alpha = 0.7f),
+                start = Offset(x, topPadding),
+                end = Offset(x, topPadding + chartHeight),
+                strokeWidth = 1.dp.toPx(),
+            )
+        }
+
+        fun buildPath(values: List<Float>): Path = Path().apply {
+            values.forEachIndexed { index, value ->
+                val x = xAt(index)
+                val y = yAt(value)
+                if (index == 0) moveTo(x, y) else lineTo(x, y)
+            }
+        }
+
+        val relocationPath = buildPath(relocationValues)
+        val maintainPath = buildPath(maintainValues)
+
+        // B를 먼저 그리고 A 점선을 위에 올려, 두 값이 같아도 두 시나리오가 모두 보이게 한다.
+        drawPath(
+            path = relocationPath,
+            color = PrimaryBlue,
+            style = Stroke(width = 4.dp.toPx(), cap = StrokeCap.Round),
+        )
+        drawPath(
+            path = maintainPath,
+            color = AccentCoral,
+            style = Stroke(
+                width = 3.dp.toPx(),
+                cap = StrokeCap.Round,
+                pathEffect = PathEffect.dashPathEffect(floatArrayOf(12.dp.toPx(), 8.dp.toPx())),
+            ),
+        )
+
+        val markerStep = (count / 8).coerceAtLeast(1)
+        maintainValues.forEachIndexed { index, value ->
+            if (index % markerStep == 0 || index == count - 1) {
+                drawCircle(
+                    color = AccentCoral,
+                    radius = 3.5.dp.toPx(),
+                    center = Offset(xAt(index), yAt(value)),
+                )
+            }
+        }
+        relocationValues.forEachIndexed { index, value ->
+            if (index % markerStep == 0 || index == count - 1) {
+                drawCircle(
+                    color = PrimaryBlue,
+                    radius = 2.5.dp.toPx(),
+                    center = Offset(xAt(index), yAt(value)),
+                )
+            }
+        }
+
+        val firstAge = relocationSnapshots.firstOrNull()?.age
+        val lastAge = relocationSnapshots.getOrNull(count - 1)?.age
+        if (firstAge != null && lastAge != null) {
+            val labelY = size.height - 4.dp.toPx()
+            drawContext.canvas.nativeCanvas.drawText("${firstAge}세", leftPadding, labelY, textPaint)
+            val lastLabel = "${lastAge}세"
+            drawContext.canvas.nativeCanvas.drawText(
+                lastLabel,
+                size.width - rightPadding - textPaint.measureText(lastLabel),
+                labelY,
+                textPaint,
             )
         }
     }
@@ -220,6 +397,18 @@ private fun DeficitAgeTimeline(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+    }
+}
+
+@Composable
+private fun ComparisonLegend() {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        TimelineLegendItem(color = AccentCoral, label = "A · 현재 유지")
+        TimelineLegendItem(color = PrimaryBlue, label = "B · 거주지 이동")
     }
 }
 

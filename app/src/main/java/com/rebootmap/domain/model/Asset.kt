@@ -22,14 +22,23 @@ sealed class Asset {
         override val id: String = "real_estate",
         val currentValue: Long,
         val debtAmount: Long = 0L,
+        val acquisitionCost: Long = 0L,
+        val holdingYears: Int = 10,
+        val isPrimaryResidence: Boolean = true,
         val saleYear: Int?,
     ) : Asset() {
         init {
             require(currentValue >= 0) { "부동산 시세는 0 이상이어야 합니다." }
             require(debtAmount >= 0) { "부채 금액은 0 이상이어야 합니다." }
+            require(acquisitionCost >= 0) { "취득가액은 0 이상이어야 합니다." }
+            require(holdingYears in 0..50) { "보유 연수가 유효하지 않습니다." }
         }
 
         val netEquity: Long get() = (currentValue - debtAmount).coerceAtLeast(0L)
+
+        /** 양도세 계산용 취득가 — 미입력 시 순자산 기준(차익 0 가정) */
+        val effectiveAcquisitionCost: Long
+            get() = if (acquisitionCost > 0) acquisitionCost else netEquity
     }
 
     data class NationalPension(
@@ -39,7 +48,7 @@ sealed class Asset {
     ) : Asset() {
         init {
             require(monthlyPayout >= 0) { "국민연금 수령액은 0 이상이어야 합니다." }
-            require(startAge in 55..75) { "수령 시작 연령은 55~75 사이여야 합니다." }
+            require(startAge == 0 || startAge in 55..75) { "수령 시작 연령은 55~75 사이여야 합니다." }
         }
     }
 
@@ -58,7 +67,9 @@ sealed class Asset {
         init {
             require(balance >= 0) { "퇴직연금 잔액은 0 이상이어야 합니다." }
             require(monthlyContribution >= 0) { "월 납입액은 0 이상이어야 합니다." }
-            require(contributionEndAge in 18..100) { "납입 종료 연령이 유효하지 않습니다." }
+            require(contributionEndAge == 0 || contributionEndAge in 18..100) {
+                "납입 종료 연령이 유효하지 않습니다."
+            }
             require(annualReturnRate in -0.2..0.2) { "운용 수익률이 유효하지 않습니다." }
         }
     }
@@ -79,8 +90,12 @@ sealed class Asset {
         init {
             require(balance >= 0) { "개인연금 잔액은 0 이상이어야 합니다." }
             require(monthlyContribution >= 0) { "월 납입액은 0 이상이어야 합니다." }
-            require(contributionEndAge in 18..100) { "납입 종료 연령이 유효하지 않습니다." }
-            require(payoutStartAge in 55..70) { "수령 개시 연령은 55~70세 사이여야 합니다." }
+            require(contributionEndAge == 0 || contributionEndAge in 18..100) {
+                "납입 종료 연령이 유효하지 않습니다."
+            }
+            require(payoutStartAge == 0 || payoutStartAge in 55..70) {
+                "수령 개시 연령은 55~70세 사이여야 합니다."
+            }
             require(annualReturnRate in -0.2..0.2) { "운용 수익률이 유효하지 않습니다." }
         }
     }
@@ -101,8 +116,10 @@ sealed class Asset {
         init {
             require(balance >= 0) { "노랑우산 잔액은 0 이상이어야 합니다." }
             require(monthlyContribution >= 0) { "월 공제부금은 0 이상이어야 합니다." }
-            require(contributionEndAge in 18..100) { "납입 종료 연령이 유효하지 않습니다." }
-            require(payoutAge in 55..70) { "수령 연령은 55~70세 사이여야 합니다." }
+            require(contributionEndAge == 0 || contributionEndAge in 18..100) {
+                "납입 종료 연령이 유효하지 않습니다."
+            }
+            require(payoutAge == 0 || payoutAge in 55..70) { "수령 연령은 55~70세 사이여야 합니다." }
             require(annualReturnRate in 0.0..0.1) { "공제이자율이 유효하지 않습니다." }
         }
     }
@@ -141,9 +158,29 @@ sealed class Asset {
     ) : Asset() {
         init {
             require(monthlyAmount >= 0) { "월 고정수입은 0 이상이어야 합니다." }
-            require(startAge in 18..100) { "수입 시작 연령이 유효하지 않습니다." }
-            require(endAge in 18..100) { "수입 종료 연령이 유효하지 않습니다." }
-            require(startAge <= endAge) { "수입 시작 연령은 종료 연령 이하여야 합니다." }
+            require(startAge == 0 || startAge in 18..100) { "수입 시작 연령이 유효하지 않습니다." }
+            require(endAge == 0 || endAge in 18..100) { "수입 종료 연령이 유효하지 않습니다." }
+            require(startAge == 0 && endAge == 0 || startAge in 18..100 && endAge in 18..100 && startAge <= endAge) {
+                "수입 시작 연령은 종료 연령 이하여야 합니다."
+            }
+        }
+    }
+
+    /**
+     * 주택연금 (역모기지) — 주택 담보 월 수령액
+     * - homeEquityOverride가 0이면 부동산 순자산을 담보로 사용
+     */
+    data class HousingPension(
+        override val id: String = "housing_pension",
+        val enabled: Boolean = false,
+        val startAge: Int = 65,
+        val homeEquityOverride: Long = 0L,
+    ) : Asset() {
+        init {
+            require(startAge == 0 || startAge in 55..80) {
+                "주택연금 개시 연령은 55~80세 사이여야 합니다."
+            }
+            require(homeEquityOverride >= 0) { "담보 주택 가치는 0 이상이어야 합니다." }
         }
     }
 }

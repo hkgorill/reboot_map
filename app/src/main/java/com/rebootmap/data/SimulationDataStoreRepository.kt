@@ -36,4 +36,10 @@ class SimulationDataStoreRepository(
             preferences[stateKey] = json.encodeToString(state)
         }
     }
+
+    override suspend fun clear() {
+        context.simulationDataStore.edit { preferences ->
+            preferences.remove(stateKey)
+        }
+    }
 }

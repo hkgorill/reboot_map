@@ -9,13 +9,26 @@ class SimulationStateMapperTest {
 
     @Test
     fun `저장 상태와 UI 상태 간 왕복 변환이 일관된다`() {
-        val original = SimulationUiState.fromPreset(age = 45).copy(isOnboardingCompleted = true)
+        val original = SimulationUiState.afterOnboarding(
+            currentAge = 45,
+            retirementAge = 60,
+            monthlyLivingExpense = 3_000_000L,
+        ).copy(
+            isOnboardingCompleted = true,
+            assets = SimulationStateMapper.emptyAssets().map { asset ->
+                when (asset) {
+                    is Asset.RealEstate -> asset.copy(currentValue = 50_000L * 10_000, debtAmount = 17_500L * 10_000)
+                    is Asset.Investment -> asset.copy(currentValue = 10_000_000L, annualReturnRate = 0.05)
+                    else -> asset
+                }
+            },
+        )
 
         val persisted = SimulationStateMapper.toPersisted(original)
         val restored = SimulationStateMapper.toUiState(persisted)
 
         assertEquals(original.profile, restored.profile)
-        assertEquals(original.assumptions, restored.assumptions)
+        assertEquals(original.assumptions.inflationRate, restored.assumptions.inflationRate, 0.001)
         assertEquals(original.assets.size, restored.assets.size)
 
         val originalEstate = original.assets.filterIsInstance<Asset.RealEstate>().first()

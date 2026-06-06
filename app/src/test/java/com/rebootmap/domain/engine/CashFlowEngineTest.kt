@@ -457,4 +457,50 @@ class CashFlowEngineTest {
         assertEquals(24_000_000L, at60.annualIncome)
         assertNull(at63)
     }
+
+    @Test
+    fun `T23 - 1세대1주택 비과세 매각 시 양도소득세가 0이다`() {
+        val profile = UserProfile(
+            currentAge = 40,
+            retirementAge = 65,
+            lifeExpectancy = 42,
+            monthlyLivingExpense = 0L,
+        )
+        val assets = listOf(
+            Asset.RealEstate(
+                currentValue = 500_000_000L,
+                acquisitionCost = 300_000_000L,
+                holdingYears = 5,
+                isPrimaryResidence = true,
+                saleYear = baseYear + 1,
+            ),
+        )
+
+        val result = engine.project(input(profile = profile, assets = assets))
+        val saleYear = result.yearlySnapshots.first { it.year == baseYear + 1 }
+
+        assertEquals(500_000_000L, saleYear.annualIncome)
+        assertEquals(0L, saleYear.annualTax)
+    }
+
+    @Test
+    fun `T24 - 주택연금 개시 후 연 수입에 반영된다`() {
+        val profile = UserProfile(
+            currentAge = 63,
+            retirementAge = 65,
+            lifeExpectancy = 67,
+            monthlyLivingExpense = 0L,
+        )
+        val assets = listOf(
+            Asset.RealEstate(currentValue = 300_000_000L, saleYear = null),
+            Asset.HousingPension(enabled = true, startAge = 65),
+        )
+
+        val result = engine.project(input(profile = profile, assets = assets))
+        val at64 = result.yearlySnapshots.first { it.age == 64 }
+        val at65 = result.yearlySnapshots.first { it.age == 65 }
+
+        assertEquals(0L, at64.annualIncome)
+        assertTrue(at65.annualIncome > 0)
+    }
 }

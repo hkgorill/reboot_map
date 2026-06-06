@@ -12,6 +12,7 @@ import com.rebootmap.domain.model.EconomicAssumptions
 import com.rebootmap.domain.model.SimulationInput
 import com.rebootmap.domain.model.UserProfile
 import com.rebootmap.domain.preset.AgeBasedPreset
+import com.rebootmap.domain.scenario.RelocationPlan
 import com.rebootmap.presentation.components.InvestmentReturnRate
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -32,6 +33,8 @@ class SimulationViewModel(
     val uiState: StateFlow<SimulationUiState> = _uiState.asStateFlow()
 
     private var saveJob: Job? = null
+    private var calculateJob: Job? = null
+    private var calculationGeneration = 0
     private var lastPresetAge: Int? = null
 
     init {
@@ -41,7 +44,7 @@ class SimulationViewModel(
                 if (saved != null) {
                     SimulationStateMapper.toUiState(saved).copy(isLoading = false)
                 } else {
-                    SimulationUiState.fromPreset(age = 40).copy(isLoading = false)
+                    SimulationUiState.onboarding().copy(isLoading = false)
                 }
             }
             lastPresetAge = _uiState.value.profile.currentAge
@@ -50,21 +53,15 @@ class SimulationViewModel(
     }
 
     fun completeOnboarding(currentAge: Int, retirementAge: Int, monthlyLivingExpense: Long) {
-        val preset = AgeBasedPreset.forAge(currentAge.coerceIn(18, 100))
-        _uiState.update {
-            it.copy(
-                isOnboardingCompleted = true,
-                profile = preset.profile.copy(
-                    currentAge = currentAge.coerceIn(18, 100),
-                    retirementAge = retirementAge.coerceIn(currentAge.coerceIn(18, 100), 100),
-                    monthlyLivingExpense = monthlyLivingExpense,
-                ),
-                assumptions = preset.assumptions,
-                assets = preset.assets,
-                presetSourceNote = preset.sourceNote,
-            )
-        }
-        lastPresetAge = currentAge.coerceIn(18, 100)
+        val safeAge = currentAge.coerceIn(18, 100)
+        saveJob?.cancel()
+        calculationGeneration++
+        _uiState.value = SimulationUiState.afterOnboarding(
+            currentAge = safeAge,
+            retirementAge = retirementAge.coerceIn(safeAge, 100),
+            monthlyLivingExpense = monthlyLivingExpense.coerceAtLeast(0L),
+        ).copy(isLoading = false)
+        lastPresetAge = safeAge
         calculate()
         persistState()
     }
@@ -76,22 +73,16 @@ class SimulationViewModel(
         }
     }
 
-    /** 나이 입력 완료(포커스 해제) 시 연령대별 평균 프리셋 적용 */
+    /** 나이 입력 완료(포커스 해제) 시 연령대별 참고값만 갱신 */
     fun commitCurrentAge(age: Int) {
         if (age !in 18..100) return
-        if (lastPresetAge == age) return
+        val preset = AgeBasedPreset.forAge(age)
         lastPresetAge = age
-        applyPreset(AgeBasedPreset.forAge(age))
-    }
-
-    fun applyPreset(preset: AgeBasedPreset) {
-        lastPresetAge = preset.profile.currentAge
         _uiState.update {
             it.copy(
-                profile = preset.profile,
-                assumptions = preset.assumptions,
-                assets = preset.assets,
+                referencePreset = preset,
                 presetSourceNote = preset.sourceNote,
+                profile = it.profile.copy(currentAge = age),
             )
         }
         calculate()
@@ -137,25 +128,77 @@ class SimulationViewModel(
         _uiState.update { it.copy(isBasicInfoExpanded = !it.isBasicInfoExpanded) }
     }
 
-    fun calculate() {
-        val state = _uiState.value
-        _uiState.update { it.copy(isCalculating = true) }
+    fun toggleRelocationExpanded() {
+        _uiState.update { it.copy(isRelocationExpanded = !it.isRelocationExpanded) }
+    }
 
-        val activeAssets = state.assets.filter { it.hasValue() }
-        val projection = engine.project(
-            SimulationInput(
-                profile = state.profile,
-                assumptions = state.assumptions,
+    fun updateRelocationPlan(plan: RelocationPlan) {
+        _uiState.update { it.copy(relocationPlan = plan) }
+        calculate()
+    }
+
+    fun resetAllInputs() {
+        saveJob?.cancel()
+        calculateJob?.cancel()
+        calculationGeneration++
+        lastPresetAge = null
+        _uiState.value = SimulationUiState.onboarding()
+        viewModelScope.launch {
+            repository.clear()
+        }
+    }
+
+    fun calculate() {
+        calculateJob?.cancel()
+        val generation = ++calculationGeneration
+        calculateJob = viewModelScope.launch {
+            val state = _uiState.value
+            if (!state.isOnboardingCompleted) return@launch
+
+            _uiState.update { it.copy(isCalculating = true) }
+
+            val activeAssets = state.assets.filter { it.hasValue() }
+            val preset = state.referencePreset
+                ?: AgeBasedPreset.forAge(state.profile.currentAge)
+            val effectiveProfile = state.profile.copy(
+                lifeExpectancy = state.profile.lifeExpectancy
+                    .takeIf { it > state.profile.currentAge }
+                    ?: preset.profile.lifeExpectancy,
+            )
+            val effectiveAssumptions = state.assumptions.copy(
+                inflationRate = state.assumptions.inflationRate
+                    .takeIf { it > 0.0 }
+                    ?: preset.assumptions.inflationRate,
+            )
+            val baseInput = SimulationInput(
+                profile = effectiveProfile,
+                assumptions = effectiveAssumptions,
                 assets = activeAssets,
                 startYear = Year.now().value,
-            ),
-        )
+            )
 
-        _uiState.update {
-            it.copy(projection = projection, isCalculating = false)
-        }
-        if (state.isOnboardingCompleted) {
-            persistState()
+            val relocationPlan = state.relocationPlan.takeIf { it.isConfigured() }
+            val projection = engine.project(
+                baseInput.copy(relocationPlan = relocationPlan),
+            )
+            val baselineProjection = if (relocationPlan != null) {
+                engine.project(baseInput)
+            } else {
+                null
+            }
+
+            if (generation != calculationGeneration) return@launch
+
+            _uiState.update {
+                it.copy(
+                    projection = projection,
+                    baselineProjection = baselineProjection,
+                    isCalculating = false,
+                )
+            }
+            if (_uiState.value.isOnboardingCompleted) {
+                persistState()
+            }
         }
     }
 
@@ -169,12 +212,13 @@ class SimulationViewModel(
 
     private fun Asset.hasValue(): Boolean = when (this) {
         is Asset.RealEstate -> currentValue > 0 || debtAmount > 0
-        is Asset.NationalPension -> monthlyPayout > 0
+        is Asset.NationalPension -> monthlyPayout > 0 && startAge > 0
         is Asset.SeverancePension -> balance > 0 || monthlyContribution > 0
         is Asset.PersonalPension -> balance > 0 || monthlyContribution > 0
         is Asset.YellowUmbrella -> balance > 0 || monthlyContribution > 0
         is Asset.Investment -> currentValue > 0
-        is Asset.CashSavings -> maturityAmount > 0
-        is Asset.FixedIncome -> monthlyAmount > 0
+        is Asset.CashSavings -> maturityAmount > 0 && maturityYear > 0
+        is Asset.FixedIncome -> monthlyAmount > 0 && startAge > 0 && endAge > 0
+        is Asset.HousingPension -> enabled && startAge > 0
     }
 }

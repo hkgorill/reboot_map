@@ -4,6 +4,10 @@ import com.rebootmap.domain.model.Asset
 import com.rebootmap.domain.model.CashFlowProjection
 import com.rebootmap.domain.model.SimulationInput
 import com.rebootmap.domain.model.YearSnapshot
+import com.rebootmap.domain.scenario.PurchaseTiming
+import com.rebootmap.domain.scenario.RelocationPlan
+import com.rebootmap.domain.tax.CapitalGainsTaxEngine
+import com.rebootmap.domain.tax.HousingPensionEngine
 import kotlin.math.pow
 import kotlin.math.roundToLong
 
@@ -26,6 +30,9 @@ class CashFlowEngine {
         val cashSavings = input.assets.filterIsInstance<Asset.CashSavings>()
         val fixedIncomes = input.assets.filterIsInstance<Asset.FixedIncome>()
         val realEstates = input.assets.filterIsInstance<Asset.RealEstate>()
+        val housingPensions = input.assets.filterIsInstance<Asset.HousingPension>()
+        val relocation = input.relocationPlan?.takeIf { it.isConfigured() }
+        val relocationSchedule = relocation?.let { buildRelocationSchedule(it, realEstates.firstOrNull()) }
 
         val severanceBalances = severancePensions.associateWith { it.balance }.toMutableMap()
         val personalBalances = personalPensions.associateWith { it.balance }.toMutableMap()
@@ -38,6 +45,7 @@ class CashFlowEngine {
         val paidYellowUmbrellas = mutableSetOf<String>()
 
         var liquidBalance = 0L
+        var newHomeOwned = relocationSchedule?.purchaseYear?.let { it < startYear } ?: false
         val snapshots = mutableListOf<YearSnapshot>()
         var depletionYear: Int? = null
         val deficitYears = mutableListOf<Int>()
@@ -46,10 +54,12 @@ class CashFlowEngine {
             val age = profile.currentAge + (year - startYear)
             var pensionIncome = 0L
             var otherIncome = 0L
+            var realEstateSaleProceeds = 0L
+            var capitalGainsTax = 0L
 
             severancePensions.forEach { pension ->
                 val balance = severanceBalances.getValue(pension)
-                if (age < pension.contributionEndAge) {
+                if (pension.contributionEndAge > 0 && age < pension.contributionEndAge) {
                     val contributed = balance + pension.monthlyContribution * 12
                     severanceBalances[pension] = applyReturn(contributed, pension.annualReturnRate)
                 } else if (age >= profile.retirementAge && balance > 0) {
@@ -62,10 +72,10 @@ class CashFlowEngine {
 
             personalPensions.forEach { pension ->
                 val balance = personalBalances.getValue(pension)
-                if (age < pension.contributionEndAge) {
+                if (pension.contributionEndAge > 0 && age < pension.contributionEndAge) {
                     val contributed = balance + pension.monthlyContribution * 12
                     personalBalances[pension] = applyReturn(contributed, pension.annualReturnRate)
-                } else if (age >= pension.payoutStartAge && balance > 0) {
+                } else if (pension.payoutStartAge > 0 && age >= pension.payoutStartAge && balance > 0) {
                     val yearsRemaining = (profile.lifeExpectancy - age).coerceAtLeast(1)
                     val withdrawal = balance / yearsRemaining
                     personalBalances[pension] = balance - withdrawal
@@ -76,13 +86,13 @@ class CashFlowEngine {
             yellowUmbrellas.forEach { umbrella ->
                 if (umbrella.id in paidYellowUmbrellas) return@forEach
                 val balance = yellowBalances.getValue(umbrella)
-                if (age < umbrella.payoutAge) {
+                if (umbrella.payoutAge > 0 && age < umbrella.payoutAge) {
                     var updated = applyReturn(balance, umbrella.annualReturnRate)
-                    if (age < umbrella.contributionEndAge) {
+                    if (umbrella.contributionEndAge > 0 && age < umbrella.contributionEndAge) {
                         updated += umbrella.monthlyContribution * 12
                     }
                     yellowBalances[umbrella] = updated
-                } else if (balance > 0) {
+                } else if (umbrella.payoutAge > 0 && balance > 0) {
                     otherIncome += balance
                     yellowBalances[umbrella] = 0L
                     paidYellowUmbrellas.add(umbrella.id)
@@ -90,13 +100,13 @@ class CashFlowEngine {
             }
 
             nationalPensions.forEach { pension ->
-                if (age >= pension.startAge) {
+                if (pension.startAge > 0 && age >= pension.startAge) {
                     pensionIncome += pension.monthlyPayout * 12
                 }
             }
 
             cashSavings.forEach { saving ->
-                if (year == saving.maturityYear && saving.id !in maturedSavings) {
+                if (saving.maturityYear > 0 && year == saving.maturityYear && saving.id !in maturedSavings) {
                     otherIncome += saving.maturityAmount
                     maturedSavings.add(saving.id)
                 }
@@ -104,13 +114,43 @@ class CashFlowEngine {
 
             realEstates.forEach { estate ->
                 if (estate.saleYear == year && estate.id !in soldRealEstates) {
+                    val twoHomeAtSale = relocationSchedule?.let { schedule ->
+                        schedule.purchaseYear != null && schedule.purchaseYear < year
+                    } ?: false
+                    val isPrimaryForTax = estate.isPrimaryResidence && !twoHomeAtSale
+
                     otherIncome += estate.netEquity
+                    realEstateSaleProceeds += estate.netEquity
+                    capitalGainsTax += CapitalGainsTaxEngine.calculate(
+                        CapitalGainsTaxEngine.Input(
+                            salePrice = estate.netEquity,
+                            acquisitionCost = estate.effectiveAcquisitionCost,
+                            holdingYears = estate.holdingYears,
+                            isPrimaryResidence = isPrimaryForTax,
+                        ),
+                    ).tax
                     soldRealEstates.add(estate.id)
                 }
             }
 
+            housingPensions.forEach { pension ->
+                if (pension.enabled && pension.startAge > 0 && age >= pension.startAge) {
+                    val homeEquity = pension.homeEquityOverride.takeIf { it > 0 }
+                        ?: unsoldRealEstateValue(realEstates, soldRealEstates)
+                    val monthly = HousingPensionEngine.calculateMonthly(
+                        HousingPensionEngine.Input(
+                            homeEquity = homeEquity,
+                            startAge = pension.startAge,
+                            currentAge = age,
+                            lifeExpectancy = profile.lifeExpectancy,
+                        ),
+                    ).monthlyPayout
+                    pensionIncome += monthly * 12
+                }
+            }
+
             fixedIncomes.forEach { income ->
-                if (age in income.startAge..income.endAge) {
+                if (income.startAge > 0 && income.endAge > 0 && age in income.startAge..income.endAge) {
                     otherIncome += income.monthlyAmount * 12
                 }
             }
@@ -135,9 +175,11 @@ class CashFlowEngine {
             if (pensionIncome > 0) {
                 annualTax += (pensionIncome * assumptions.pensionIncomeTaxRate).roundToLong()
             }
-            if (otherIncome > 0) {
-                annualTax += (otherIncome * assumptions.generalIncomeTaxRate).roundToLong()
+            val nonRealEstateOther = otherIncome - realEstateSaleProceeds
+            if (nonRealEstateOther > 0) {
+                annualTax += (nonRealEstateOther * assumptions.generalIncomeTaxRate).roundToLong()
             }
+            annualTax += capitalGainsTax
 
             val incomeGap = annualIncome - annualExpense - annualTax
             if (incomeGap < 0) {
@@ -166,12 +208,20 @@ class CashFlowEngine {
                 liquidBalance += incomeGap
             }
 
+            if (relocationSchedule?.purchaseYear == year && !newHomeOwned) {
+                liquidBalance -= relocationSchedule.newHomeEquity
+                newHomeOwned = true
+            }
+
+            val newHomeEquity = if (newHomeOwned) relocationSchedule?.newHomeEquity ?: 0L else 0L
+
             val totalAssets = liquidBalance +
                 investmentValue +
                 severanceBalances.values.sum() +
                 personalBalances.values.sum() +
                 yellowBalances.values.sum() +
-                unsoldRealEstateValue(realEstates, soldRealEstates)
+                unsoldRealEstateValue(realEstates, soldRealEstates) +
+                newHomeEquity
 
             val endingBalance = totalAssets
 
@@ -224,6 +274,27 @@ class CashFlowEngine {
     ): Long = estates
         .filter { it.id !in sold }
         .sumOf { it.netEquity }
+
+    private data class RelocationSchedule(
+        val purchaseYear: Int?,
+        val newHomeEquity: Long,
+    )
+
+    private fun buildRelocationSchedule(
+        plan: RelocationPlan,
+        estate: Asset.RealEstate?,
+    ): RelocationSchedule? {
+        val saleYear = estate?.saleYear ?: return null
+        val purchaseYear = when (val timing = plan.purchaseTiming) {
+            is PurchaseTiming.SameYearAsSale -> saleYear
+            is PurchaseTiming.BeforeSale -> saleYear - timing.years
+            is PurchaseTiming.AfterSale -> saleYear + timing.years
+        }
+        return RelocationSchedule(
+            purchaseYear = purchaseYear,
+            newHomeEquity = plan.newHomeEquity,
+        )
+    }
 
     private fun <T> distributeWithdrawal(
         balances: MutableMap<T, Long>,

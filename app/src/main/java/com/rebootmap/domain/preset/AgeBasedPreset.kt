@@ -60,6 +60,10 @@ data class AgeBasedPreset(
                     Asset.RealEstate(
                         currentValue = bracket.realEstateValueMan * MAN,
                         debtAmount = bracket.realEstateDebtMan * MAN,
+                        acquisitionCost = ((bracket.realEstateValueMan - bracket.realEstateDebtMan)
+                            .coerceAtLeast(0) * MAN * 65 / 100),
+                        holdingYears = (safeAge - 30).coerceIn(2, 30),
+                        isPrimaryResidence = true,
                         saleYear = currentYear + (retirementAge - safeAge) + 3,
                     ),
                     Asset.NationalPension(
@@ -96,6 +100,7 @@ data class AgeBasedPreset(
                         startAge = safeAge,
                         endAge = lifeExpectancy,
                     ),
+                    Asset.HousingPension(enabled = false, startAge = 65),
                 ),
                 sourceNote = bracket.sourceNote,
             )

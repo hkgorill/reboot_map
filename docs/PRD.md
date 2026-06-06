@@ -212,7 +212,7 @@ netCashFlow = annualIncome - annualExpense - annualTax
 
 ---
 
-### Phase 2 — 실시간 시각화 + 대시보드 ✅ (자체테스트 완료 · 실기기 대기)
+### Phase 2 — 실시간 시각화 + 대시보드 ✅ (완료)
 
 > 상세: [`phases/PHASE-02.md`](phases/PHASE-02.md) · 테스트: [`reports/phase-02-test-report.md`](reports/phase-02-test-report.md)
 
@@ -233,22 +233,25 @@ netCashFlow = annualIncome - annualExpense - annualTax
 
 ---
 
-### Phase 3 — 부동산 유동화 + 절세 시나리오
+### Phase 3 — 부동산 유동화 + 절세 시나리오 ✅ (코드 완료 · 실기기 일괄 대기)
 
-> 상세: [`phases/PHASE-03.md`](phases/PHASE-03.md)
+> 상세: [`phases/PHASE-03.md`](phases/PHASE-03.md) · 테스트: [`reports/phase-03-test-report.md`](reports/phase-03-test-report.md)
 
 **목표:** 거주지 이동·양도세·주택연금 시뮬레이션
 
 **산출물**
-- 거주지 이동 시뮬레이터 (2주택 상태 포함)
-- 양도소득세 계산기 (1세대1주택 비과세 요건)
-- 부부 공동명의 종부세/양도세 비교
-- 주택연금 월 수령액 시뮬
-- 재투자( IRP/주식) 현금흐름 추적
+- [x] 거주지 이동 시뮬레이터 (2주택 상태 포함)
+- [x] 양도소득세 계산기 (1세대1주택 비과세 요건)
+- [ ] 부부 공동명의 종부세/양도세 비교
+- [x] 주택연금 월 수령액 시뮬
+- [ ] 재투자(IRP/주식) 현금흐름 추적
+- [x] Hint 기반 입력 UX (연령대 평균은 참고 hint, 온보딩 3항목만 실제 값)
+- [x] 입력 초기화 · 자동 재계산 (요약·차트·타임라인)
 
 **완료 기준**
-1. 양도세 계산 단위 테스트 (국세청 표 기준 샘플 케이스)
+1. 양도세 계산 단위 테스트 (국세청 표 기준 샘플 케이스) — 48건 PASS
 2. 시나리오 A/B 비교 차트
+3. 실기기 체크리스트 — Phase 4 완료 후 Phase 3·4 일괄 검증 예정
 
 ---
 
@@ -346,4 +349,4 @@ netCashFlow = annualIncome - annualExpense - annualTax
 
 ---
 
-*다음 단계: Phase 2 실기기 게이트 → Phase 3 (부동산·절세)*
+*다음 단계: Phase 4 (목돈 타임라인·PDF 리포트) — Phase 3 코드 완료, 실기기는 Phase 4 후 일괄 검증*

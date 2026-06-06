@@ -29,6 +29,7 @@ fun ManWonInputField(
     onValueChange: (Long) -> Unit,
     modifier: Modifier = Modifier,
     supportingText: String? = null,
+    placeholder: String? = null,
 ) {
     val manValue = valueInWon / MAN_WON
     var text by remember(valueInWon) {
@@ -51,6 +52,7 @@ fun ManWonInputField(
             onValueChange(parseManWonInput(digits) * MAN_WON)
         },
         label = { Text(label) },
+        placeholder = placeholder?.let { { Text(it) } },
         supportingText = {
             Text(supportingText ?: "단위: 만원 (예: 300 = 300만원)")
         },
@@ -76,6 +78,7 @@ fun IntInputField(
     onValueChange: (Int) -> Unit,
     modifier: Modifier = Modifier,
     supportingText: String? = null,
+    placeholder: String? = null,
     onCommit: ((Int) -> Unit)? = null,
 ) {
     var text by remember { mutableStateOf(formatIntForDisplay(value)) }
@@ -95,6 +98,7 @@ fun IntInputField(
             onValueChange(digits.toIntOrNull() ?: 0)
         },
         label = { Text(label) },
+        placeholder = placeholder?.let { { Text(it) } },
         supportingText = supportingText?.let { { Text(it) } },
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
         modifier = modifier
@@ -118,6 +122,8 @@ fun PercentInputField(
     value: Double,
     onValueChange: (Double) -> Unit,
     modifier: Modifier = Modifier,
+    supportingText: String? = null,
+    placeholder: String? = null,
     onCommit: ((Double) -> Unit)? = null,
 ) {
     fun formatPercent(percent: Double): String =
@@ -143,7 +149,8 @@ fun PercentInputField(
             onValueChange(parsed)
         },
         label = { Text(label) },
-        supportingText = { Text("예: 5 = 5%") },
+        placeholder = placeholder?.let { { Text(it) } },
+        supportingText = { Text(supportingText ?: "예: 5 = 5%") },
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
         modifier = modifier
             .fillMaxWidth()
