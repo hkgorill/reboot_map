@@ -1,6 +1,9 @@
 package com.rebootmap.presentation.components
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -9,10 +12,12 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.text.input.KeyboardType
+import kotlinx.coroutines.launch
 
 private const val MAN_WON = 10_000L
 
@@ -21,6 +26,19 @@ private fun parseManWonInput(text: String): Long =
 
 private fun formatIntForDisplay(value: Int): String =
     if (value == 0) "" else value.toString()
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun Modifier.bringIntoViewWhenFocused(): Modifier {
+    val requester = remember { BringIntoViewRequester() }
+    val scope = rememberCoroutineScope()
+    return bringIntoViewRequester(requester)
+        .onFocusChanged { focus ->
+            if (focus.isFocused) {
+                scope.launch { requester.bringIntoView() }
+            }
+        }
+}
 
 @Composable
 fun ManWonInputField(
@@ -60,6 +78,7 @@ fun ManWonInputField(
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
         modifier = modifier
             .fillMaxWidth()
+            .bringIntoViewWhenFocused()
             .onFocusChanged { focus ->
                 isFocused = focus.isFocused
                 if (!focus.isFocused) {
@@ -103,6 +122,7 @@ fun IntInputField(
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
         modifier = modifier
             .fillMaxWidth()
+            .bringIntoViewWhenFocused()
             .onFocusChanged { focus ->
                 if (isFocused && !focus.isFocused) {
                     onCommit?.invoke(text.toIntOrNull() ?: 0)
@@ -154,6 +174,7 @@ fun PercentInputField(
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
         modifier = modifier
             .fillMaxWidth()
+            .bringIntoViewWhenFocused()
             .onFocusChanged { focus ->
                 if (isFocused && !focus.isFocused) {
                     val parsed = text.replace(",", ".").toDoubleOrNull()?.div(100) ?: 0.0
