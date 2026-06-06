@@ -6,6 +6,7 @@ import com.rebootmap.domain.model.Asset
 import com.rebootmap.domain.model.EconomicAssumptions
 import com.rebootmap.domain.model.SimulationInput
 import com.rebootmap.domain.model.UserProfile
+import com.rebootmap.domain.preset.AgeBasedPreset
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -16,10 +17,32 @@ class SimulationViewModel(
     private val engine: CashFlowEngine = CashFlowEngine(),
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(SimulationUiState())
+    private val _uiState = MutableStateFlow(SimulationUiState.fromPreset(age = 40))
     val uiState: StateFlow<SimulationUiState> = _uiState.asStateFlow()
 
     init {
+        calculate()
+    }
+
+    fun updateCurrentAge(age: Int) {
+        if (age in 18..100) {
+            if (_uiState.value.profile.currentAge != age) {
+                applyPreset(AgeBasedPreset.forAge(age))
+            }
+        } else {
+            _uiState.update { it.copy(profile = it.profile.copy(currentAge = age.coerceAtLeast(0))) }
+        }
+    }
+
+    fun applyPreset(preset: AgeBasedPreset) {
+        _uiState.update {
+            it.copy(
+                profile = preset.profile,
+                assumptions = preset.assumptions,
+                assets = preset.assets,
+                presetSourceNote = preset.sourceNote,
+            )
+        }
         calculate()
     }
 
@@ -64,7 +87,7 @@ class SimulationViewModel(
     }
 
     private fun Asset.hasValue(): Boolean = when (this) {
-        is Asset.RealEstate -> currentValue > 0
+        is Asset.RealEstate -> currentValue > 0 || debtAmount > 0
         is Asset.NationalPension -> monthlyPayout > 0
         is Asset.RetirementPension -> balance > 0 || monthlyContribution > 0
         is Asset.Investment -> currentValue > 0

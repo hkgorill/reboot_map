@@ -69,7 +69,7 @@ class CashFlowEngine {
 
             realEstates.forEach { estate ->
                 if (estate.saleYear == year && estate.id !in soldRealEstates) {
-                    otherIncome += estate.currentValue
+                    otherIncome += estate.netEquity
                     soldRealEstates.add(estate.id)
                 }
             }
@@ -171,7 +171,7 @@ class CashFlowEngine {
         sold: Set<String>,
     ): Long = estates
         .filter { it.id !in sold }
-        .sumOf { it.currentValue }
+        .sumOf { it.netEquity }
 
     private fun distributeWithdrawal(
         balances: MutableMap<Asset.RetirementPension, Long>,

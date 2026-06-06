@@ -6,11 +6,16 @@ sealed class Asset {
     data class RealEstate(
         override val id: String = "real_estate",
         val currentValue: Long,
+        val debtAmount: Long = 0L,
         val saleYear: Int?,
     ) : Asset() {
         init {
             require(currentValue >= 0) { "부동산 시세는 0 이상이어야 합니다." }
+            require(debtAmount >= 0) { "부채 금액은 0 이상이어야 합니다." }
         }
+
+        /** 시세에서 대출·보증금 등 부채를 차감한 순자산 */
+        val netEquity: Long get() = (currentValue - debtAmount).coerceAtLeast(0L)
     }
 
     data class NationalPension(

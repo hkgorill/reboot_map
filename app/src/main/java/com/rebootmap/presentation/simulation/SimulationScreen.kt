@@ -33,8 +33,9 @@ import com.rebootmap.domain.model.Asset
 import com.rebootmap.domain.model.EconomicAssumptions
 import com.rebootmap.domain.model.UserProfile
 import com.rebootmap.presentation.components.IntInputField
-import com.rebootmap.presentation.components.MoneyInputField
+import com.rebootmap.presentation.components.ManWonInputField
 import com.rebootmap.presentation.components.PercentInputField
+import com.rebootmap.presentation.components.formatKoreanMan
 import java.time.Year
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -77,11 +78,17 @@ fun SimulationScreen(viewModel: SimulationViewModel) {
                         label = "현재 나이",
                         value = state.profile.currentAge,
                         onValueChange = { age ->
-                            viewModel.updateProfile(
-                                state.profile.copy(currentAge = age.coerceIn(18, 100)),
-                            )
+                            viewModel.updateCurrentAge(age)
                         },
+                        supportingText = "나이 변경 시 통계 기반 평균값이 자동 적용됩니다",
                     )
+                    if (state.presetSourceNote.isNotEmpty()) {
+                        Text(
+                            text = "📊 ${state.presetSourceNote}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                     IntInputField(
                         label = "목표 은퇴 연령",
                         value = state.profile.retirementAge,
@@ -100,9 +107,9 @@ fun SimulationScreen(viewModel: SimulationViewModel) {
                             )
                         },
                     )
-                    MoneyInputField(
-                        label = "목표 월 생활비 (원)",
-                        value = state.profile.monthlyLivingExpense,
+                    ManWonInputField(
+                        label = "목표 월 생활비",
+                        valueInWon = state.profile.monthlyLivingExpense,
                         onValueChange = { amount ->
                             viewModel.updateProfile(state.profile.copy(monthlyLivingExpense = amount))
                         },
@@ -142,11 +149,31 @@ private fun AssetInputCard(
 ) {
     when (asset) {
         is Asset.RealEstate -> SectionCard(title = "부동산", icon = Icons.Outlined.Home) {
-            MoneyInputField(
-                label = "현재 시세 (원)",
-                value = asset.currentValue,
-                onValueChange = { onAssetChange(asset.copy(currentValue = it)) },
+            ManWonInputField(
+                label = "현재 시세 (총 자산가치)",
+                valueInWon = asset.currentValue,
+                onValueChange = { value ->
+                    val debt = asset.debtAmount.coerceAtMost(value)
+                    onAssetChange(asset.copy(currentValue = value, debtAmount = debt))
+                },
+                supportingText = "아파트·주택 시세 등 총 가치를 입력하세요",
             )
+            ManWonInputField(
+                label = "부채 (대출·보증금 등)",
+                valueInWon = asset.debtAmount,
+                onValueChange = { debt ->
+                    onAssetChange(asset.copy(debtAmount = debt.coerceAtMost(asset.currentValue)))
+                },
+                supportingText = "주택담보대출 잔액, 전세보증금 반환의무 등. 없으면 0",
+            )
+            if (asset.currentValue > 0) {
+                Text(
+                    text = "순자산(시세−부채): ${formatKoreanMan(asset.netEquity)}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
             IntInputField(
                 label = "매각 예정 연도",
                 value = asset.saleYear ?: 0,
@@ -158,9 +185,9 @@ private fun AssetInputCard(
         }
 
         is Asset.NationalPension -> SectionCard(title = "국민연금", icon = Icons.Outlined.Payments) {
-            MoneyInputField(
-                label = "예상 월 수령액 (원)",
-                value = asset.monthlyPayout,
+            ManWonInputField(
+                label = "예상 월 수령액",
+                valueInWon = asset.monthlyPayout,
                 onValueChange = { onAssetChange(asset.copy(monthlyPayout = it)) },
             )
             IntInputField(
@@ -171,14 +198,14 @@ private fun AssetInputCard(
         }
 
         is Asset.RetirementPension -> SectionCard(title = "퇴직·개인연금", icon = Icons.Outlined.Savings) {
-            MoneyInputField(
-                label = "현재 잔액 (원)",
-                value = asset.balance,
+            ManWonInputField(
+                label = "현재 잔액",
+                valueInWon = asset.balance,
                 onValueChange = { onAssetChange(asset.copy(balance = it)) },
             )
-            MoneyInputField(
-                label = "월 납입액 (원)",
-                value = asset.monthlyContribution,
+            ManWonInputField(
+                label = "월 납입액",
+                valueInWon = asset.monthlyContribution,
                 onValueChange = { onAssetChange(asset.copy(monthlyContribution = it)) },
             )
             IntInputField(
@@ -189,9 +216,9 @@ private fun AssetInputCard(
         }
 
         is Asset.Investment -> SectionCard(title = "주식·재테크", icon = Icons.Outlined.TrendingUp) {
-            MoneyInputField(
-                label = "현재 평가 자산 (원)",
-                value = asset.currentValue,
+            ManWonInputField(
+                label = "현재 평가 자산",
+                valueInWon = asset.currentValue,
                 onValueChange = { onAssetChange(asset.copy(currentValue = it)) },
             )
             PercentInputField(
@@ -202,9 +229,9 @@ private fun AssetInputCard(
         }
 
         is Asset.CashSavings -> SectionCard(title = "현금·적금", icon = Icons.Outlined.Savings) {
-            MoneyInputField(
-                label = "만기 금액 (원)",
-                value = asset.maturityAmount,
+            ManWonInputField(
+                label = "만기 금액",
+                valueInWon = asset.maturityAmount,
                 onValueChange = { onAssetChange(asset.copy(maturityAmount = it)) },
             )
             IntInputField(

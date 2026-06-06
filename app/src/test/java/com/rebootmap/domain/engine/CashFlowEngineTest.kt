@@ -306,6 +306,30 @@ class CashFlowEngineTest {
     }
 
     @Test
+    fun `T16 - 부동산 부채는 순자산 기준으로 계산된다`() {
+        val profile = UserProfile(
+            currentAge = 40,
+            retirementAge = 65,
+            lifeExpectancy = 42,
+            monthlyLivingExpense = 0L,
+        )
+        val assets = listOf(
+            Asset.RealEstate(
+                currentValue = 500_000_000L,
+                debtAmount = 200_000_000L,
+                saleYear = baseYear + 1,
+            ),
+        )
+
+        val result = engine.project(input(profile = profile, assets = assets))
+        val beforeSale = result.yearlySnapshots.first { it.year == baseYear }
+        val saleYear = result.yearlySnapshots.first { it.year == baseYear + 1 }
+
+        assertEquals(300_000_000L, beforeSale.totalAssets)
+        assertEquals(300_000_000L, saleYear.annualIncome)
+    }
+
+    @Test
     fun `T15 - 부동산 미매각 시 총자산에 포함된다`() {
         val profile = UserProfile(
             currentAge = 40,

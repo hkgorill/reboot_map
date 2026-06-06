@@ -5,6 +5,8 @@ import java.util.Locale
 
 private val koreanFormat = NumberFormat.getNumberInstance(Locale.KOREA)
 
+fun formatNumberWithComma(value: Long): String = koreanFormat.format(value)
+
 fun formatKoreanWon(amount: Long): String = "${koreanFormat.format(amount)}원"
 
 fun formatKoreanMan(amount: Long): String {

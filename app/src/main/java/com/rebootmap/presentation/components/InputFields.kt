@@ -8,22 +8,30 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 
+private const val MAN_WON = 10_000L
+
+private fun parseManWonInput(text: String): Long =
+    text.filter { it.isDigit() }.toLongOrNull() ?: 0L
+
 @Composable
-fun MoneyInputField(
+fun ManWonInputField(
     label: String,
-    value: Long,
+    valueInWon: Long,
     onValueChange: (Long) -> Unit,
     modifier: Modifier = Modifier,
     supportingText: String? = null,
 ) {
+    val manValue = valueInWon / MAN_WON
     OutlinedTextField(
-        value = if (value == 0L) "" else value.toString(),
+        value = if (manValue == 0L) "" else formatNumberWithComma(manValue),
         onValueChange = { text ->
-            val parsed = text.filter { it.isDigit() }.toLongOrNull() ?: 0L
-            onValueChange(parsed)
+            onValueChange(parseManWonInput(text) * MAN_WON)
         },
         label = { Text(label) },
-        supportingText = supportingText?.let { { Text(it) } },
+        supportingText = {
+            Text(supportingText ?: "단위: 만원 (예: 300 = 300만원)")
+        },
+        suffix = { Text("만원") },
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
         modifier = modifier.fillMaxWidth(),
         singleLine = true,
