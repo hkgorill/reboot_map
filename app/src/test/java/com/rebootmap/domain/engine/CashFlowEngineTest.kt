@@ -1,0 +1,326 @@
+package com.rebootmap.domain.engine
+
+import com.rebootmap.domain.model.Asset
+import com.rebootmap.domain.model.EconomicAssumptions
+import com.rebootmap.domain.model.SimulationInput
+import com.rebootmap.domain.model.UserProfile
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class CashFlowEngineTest {
+
+    private val engine = CashFlowEngine()
+    private val baseYear = 2026
+
+    private fun input(
+        profile: UserProfile = UserProfile(),
+        assumptions: EconomicAssumptions = EconomicAssumptions(),
+        assets: List<Asset> = emptyList(),
+    ) = SimulationInput(
+        profile = profile,
+        assumptions = assumptions,
+        assets = assets,
+        startYear = baseYear,
+    )
+
+    @Test
+    fun `T01 - 자산 없이 은퇴 후 생활비만 발생하면 적자 연도가 생긴다`() {
+        val profile = UserProfile(
+            currentAge = 58,
+            retirementAge = 60,
+            lifeExpectancy = 62,
+            monthlyLivingExpense = 2_000_000L,
+        )
+
+        val result = engine.project(input(profile = profile))
+
+        assertTrue(result.deficitYears.isNotEmpty())
+        assertNotNull(result.depletionYear)
+    }
+
+    @Test
+    fun `T02 - 현금성 투자 1억으로 월 200만 생활비를 일정 기간 버틴다`() {
+        val profile = UserProfile(
+            currentAge = 60,
+            retirementAge = 60,
+            lifeExpectancy = 65,
+            monthlyLivingExpense = 2_000_000L,
+        )
+        val assets = listOf(
+            Asset.Investment(currentValue = 100_000_000L, annualReturnRate = 0.0),
+        )
+
+        val result = engine.project(input(profile = profile, assets = assets))
+
+        assertEquals(6, result.yearlySnapshots.size)
+        assertTrue(result.finalBalance >= 0)
+    }
+
+    @Test
+    fun `T03 - 국민연금은 수령 시작 연령부터 연 수입에 반영된다`() {
+        val profile = UserProfile(
+            currentAge = 63,
+            retirementAge = 60,
+            lifeExpectancy = 66,
+            monthlyLivingExpense = 500_000L,
+        )
+        val assets = listOf(
+            Asset.NationalPension(monthlyPayout = 1_500_000L, startAge = 65),
+            Asset.Investment(currentValue = 50_000_000L, annualReturnRate = 0.0),
+        )
+
+        val result = engine.project(input(profile = profile, assets = assets))
+        val at64 = result.yearlySnapshots.first { it.age == 64 }
+        val at65 = result.yearlySnapshots.first { it.age == 65 }
+
+        assertEquals(0L, at64.annualIncome)
+        assertEquals(18_000_000L, at65.annualIncome)
+    }
+
+    @Test
+    fun `T04 - 퇴직연금은 납입 종료 전까지 적립되고 은퇴 후 인출된다`() {
+        val profile = UserProfile(
+            currentAge = 50,
+            retirementAge = 60,
+            lifeExpectancy = 62,
+            monthlyLivingExpense = 1_000_000L,
+        )
+        val assets = listOf(
+            Asset.RetirementPension(
+                balance = 10_000_000L,
+                monthlyContribution = 500_000L,
+                contributionEndAge = 55,
+            ),
+            Asset.Investment(currentValue = 100_000_000L, annualReturnRate = 0.0),
+        )
+
+        val result = engine.project(input(profile = profile, assets = assets))
+        val at53 = result.yearlySnapshots.first { it.age == 53 }
+        val at54 = result.yearlySnapshots.first { it.age == 54 }
+
+        assertTrue(at54.totalAssets > at53.totalAssets)
+    }
+
+    @Test
+    fun `T05 - 투자 자산은 연 수익률만큼 복리 성장한다`() {
+        val profile = UserProfile(
+            currentAge = 40,
+            retirementAge = 65,
+            lifeExpectancy = 42,
+            monthlyLivingExpense = 1_000_000L,
+        )
+        val assets = listOf(
+            Asset.Investment(currentValue = 100_000_000L, annualReturnRate = 0.07),
+        )
+
+        val result = engine.project(input(profile = profile, assets = assets))
+        val afterOneYear = result.yearlySnapshots[0]
+
+        assertEquals(107_000_000L, afterOneYear.totalAssets)
+    }
+
+    @Test
+    fun `T06 - 적금은 만기 연도에 일시 유입된다`() {
+        val profile = UserProfile(
+            currentAge = 40,
+            retirementAge = 65,
+            lifeExpectancy = 42,
+            monthlyLivingExpense = 0L,
+        )
+        val assets = listOf(
+            Asset.CashSavings(maturityAmount = 30_000_000L, maturityYear = baseYear + 2),
+        )
+
+        val result = engine.project(input(profile = profile, assets = assets))
+        val maturity = result.yearlySnapshots.first { it.year == baseYear + 2 }
+
+        assertEquals(30_000_000L, maturity.annualIncome)
+    }
+
+    @Test
+    fun `T07 - 부동산은 매각 연도에 일시 유입된다`() {
+        val profile = UserProfile(
+            currentAge = 40,
+            retirementAge = 65,
+            lifeExpectancy = 42,
+            monthlyLivingExpense = 0L,
+        )
+        val assets = listOf(
+            Asset.RealEstate(currentValue = 500_000_000L, saleYear = baseYear + 1),
+        )
+
+        val result = engine.project(input(profile = profile, assets = assets))
+        val beforeSale = result.yearlySnapshots.first { it.year == baseYear }
+        val saleYear = result.yearlySnapshots.first { it.year == baseYear + 1 }
+
+        assertEquals(500_000_000L, beforeSale.totalAssets)
+        assertEquals(500_000_000L, saleYear.annualIncome)
+        assertTrue(result.yearlySnapshots.last().totalAssets > 0L)
+    }
+
+    @Test
+    fun `T08 - 물가상승률 2퍼센트가 10년 후 생활비에 반영된다`() {
+        val profile = UserProfile(
+            currentAge = 60,
+            retirementAge = 60,
+            lifeExpectancy = 70,
+            monthlyLivingExpense = 1_000_000L,
+        )
+        val assumptions = EconomicAssumptions(inflationRate = 0.02)
+        val assets = listOf(
+            Asset.Investment(currentValue = 1_000_000_000L, annualReturnRate = 0.0),
+        )
+
+        val result = engine.project(input(profile = profile, assumptions = assumptions, assets = assets))
+        val year0 = result.yearlySnapshots.first()
+        val year10 = result.yearlySnapshots.first { it.year == baseYear + 10 }
+
+        assertEquals(12_000_000L, year0.annualExpense)
+        assertEquals(14_627_933L, year10.annualExpense)
+    }
+
+    @Test
+    fun `T09 - 복합 자산 시나리오에서 스냅샷 연도와 나이가 일관된다`() {
+        val profile = UserProfile(
+            currentAge = 55,
+            retirementAge = 60,
+            lifeExpectancy = 65,
+            monthlyLivingExpense = 2_500_000L,
+        )
+        val assets = listOf(
+            Asset.NationalPension(monthlyPayout = 1_200_000L, startAge = 65),
+            Asset.RetirementPension(
+                balance = 50_000_000L,
+                monthlyContribution = 300_000L,
+                contributionEndAge = 60,
+            ),
+            Asset.Investment(currentValue = 80_000_000L, annualReturnRate = 0.05),
+            Asset.CashSavings(maturityAmount = 20_000_000L, maturityYear = baseYear + 3),
+            Asset.RealEstate(currentValue = 300_000_000L, saleYear = baseYear + 5),
+        )
+
+        val result = engine.project(input(profile = profile, assets = assets))
+
+        assertEquals(11, result.yearlySnapshots.size)
+        result.yearlySnapshots.forEachIndexed { index, snapshot ->
+            assertEquals(baseYear + index, snapshot.year)
+            assertEquals(55 + index, snapshot.age)
+        }
+    }
+
+    @Test
+    fun `T10 - 기대수명이 은퇴연령과 같으면 1년 시뮬레이션`() {
+        val profile = UserProfile(
+            currentAge = 60,
+            retirementAge = 60,
+            lifeExpectancy = 60,
+            monthlyLivingExpense = 1_000_000L,
+        )
+        val assets = listOf(
+            Asset.Investment(currentValue = 50_000_000L, annualReturnRate = 0.0),
+        )
+
+        val result = engine.project(input(profile = profile, assets = assets))
+
+        assertEquals(1, result.yearlySnapshots.size)
+        assertEquals(60, result.yearlySnapshots.first().age)
+    }
+
+    @Test
+    fun `T11 - 물가상승률 0퍼센트면 생활비가 고정된다`() {
+        val profile = UserProfile(
+            currentAge = 60,
+            retirementAge = 60,
+            lifeExpectancy = 63,
+            monthlyLivingExpense = 2_000_000L,
+        )
+        val assumptions = EconomicAssumptions(inflationRate = 0.0)
+        val assets = listOf(
+            Asset.Investment(currentValue = 500_000_000L, annualReturnRate = 0.0),
+        )
+
+        val result = engine.project(input(profile = profile, assumptions = assumptions, assets = assets))
+
+        result.yearlySnapshots.forEach { snapshot ->
+            assertEquals(24_000_000L, snapshot.annualExpense)
+        }
+    }
+
+    @Test
+    fun `T12 - 충분한 자산이면 고갈 연도가 없다`() {
+        val profile = UserProfile(
+            currentAge = 60,
+            retirementAge = 60,
+            lifeExpectancy = 65,
+            monthlyLivingExpense = 1_000_000L,
+        )
+        val assets = listOf(
+            Asset.Investment(currentValue = 1_000_000_000L, annualReturnRate = 0.03),
+            Asset.NationalPension(monthlyPayout = 2_000_000L, startAge = 60),
+        )
+
+        val result = engine.project(input(profile = profile, assets = assets))
+
+        assertNull(result.depletionYear)
+        assertTrue(result.finalBalance > 0)
+    }
+
+    @Test
+    fun `T13 - 연금 소득에 간이 연금소득세가 적용된다`() {
+        val profile = UserProfile(
+            currentAge = 65,
+            retirementAge = 60,
+            lifeExpectancy = 66,
+            monthlyLivingExpense = 0L,
+        )
+        val assets = listOf(
+            Asset.NationalPension(monthlyPayout = 1_000_000L, startAge = 65),
+        )
+
+        val result = engine.project(input(profile = profile, assets = assets))
+        val snapshot = result.yearlySnapshots.first()
+
+        assertEquals(396_000L, snapshot.annualTax)
+    }
+
+    @Test
+    fun `T14 - 은퇴 전에는 생활비가 발생하지 않는다`() {
+        val profile = UserProfile(
+            currentAge = 50,
+            retirementAge = 60,
+            lifeExpectancy = 55,
+            monthlyLivingExpense = 3_000_000L,
+        )
+        val assets = listOf(
+            Asset.Investment(currentValue = 10_000_000L, annualReturnRate = 0.0),
+        )
+
+        val result = engine.project(input(profile = profile, assets = assets))
+
+        result.yearlySnapshots.forEach { snapshot ->
+            assertEquals(0L, snapshot.annualExpense)
+        }
+    }
+
+    @Test
+    fun `T15 - 부동산 미매각 시 총자산에 포함된다`() {
+        val profile = UserProfile(
+            currentAge = 40,
+            retirementAge = 65,
+            lifeExpectancy = 42,
+            monthlyLivingExpense = 0L,
+        )
+        val assets = listOf(
+            Asset.RealEstate(currentValue = 200_000_000L, saleYear = null),
+        )
+
+        val result = engine.project(input(profile = profile, assets = assets))
+
+        result.yearlySnapshots.forEach { snapshot ->
+            assertEquals(200_000_000L, snapshot.totalAssets)
+        }
+    }
+}
