@@ -52,4 +52,5 @@ data class SimulationPersistedState(
     val housingPensionEnabled: Boolean = false,
     val housingPensionStartAge: Int = 65,
     val housingPensionHomeEquity: Long = 0L,
+    val lumpSumExpenses: List<PersistedLumpSumExpense> = emptyList(),
 )

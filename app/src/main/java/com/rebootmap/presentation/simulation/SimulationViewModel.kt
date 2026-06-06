@@ -7,6 +7,8 @@ import com.rebootmap.data.SimulationDataStoreRepository
 import com.rebootmap.data.SimulationRepository
 import com.rebootmap.data.mapper.SimulationStateMapper
 import com.rebootmap.domain.engine.CashFlowEngine
+import com.rebootmap.domain.matching.AssetMatchingEngine
+import com.rebootmap.domain.milestone.LumpSumExpense
 import com.rebootmap.domain.model.Asset
 import com.rebootmap.domain.model.EconomicAssumptions
 import com.rebootmap.domain.model.SimulationInput
@@ -132,6 +134,33 @@ class SimulationViewModel(
         _uiState.update { it.copy(isRelocationExpanded = !it.isRelocationExpanded) }
     }
 
+    fun toggleMilestoneExpanded() {
+        _uiState.update { it.copy(isMilestoneExpanded = !it.isMilestoneExpanded) }
+    }
+
+    fun addLumpSumExpense(expense: LumpSumExpense) {
+        _uiState.update { it.copy(lumpSumExpenses = it.lumpSumExpenses + expense) }
+        calculate()
+    }
+
+    fun updateLumpSumExpense(expense: LumpSumExpense) {
+        _uiState.update { state ->
+            state.copy(
+                lumpSumExpenses = state.lumpSumExpenses.map {
+                    if (it.id == expense.id) expense else it
+                },
+            )
+        }
+        calculate()
+    }
+
+    fun removeLumpSumExpense(expenseId: String) {
+        _uiState.update { state ->
+            state.copy(lumpSumExpenses = state.lumpSumExpenses.filter { it.id != expenseId })
+        }
+        calculate()
+    }
+
     fun updateRelocationPlan(plan: RelocationPlan) {
         _uiState.update { it.copy(relocationPlan = plan) }
         calculate()
@@ -170,11 +199,13 @@ class SimulationViewModel(
                     .takeIf { it > 0.0 }
                     ?: preset.assumptions.inflationRate,
             )
+            val startYear = Year.now().value
             val baseInput = SimulationInput(
                 profile = effectiveProfile,
                 assumptions = effectiveAssumptions,
                 assets = activeAssets,
-                startYear = Year.now().value,
+                startYear = startYear,
+                lumpSumExpenses = state.lumpSumExpenses,
             )
 
             val relocationPlan = state.relocationPlan.takeIf { it.isConfigured() }
@@ -187,12 +218,22 @@ class SimulationViewModel(
                 null
             }
 
+            val expenseMatches = state.lumpSumExpenses.associate { expense ->
+                expense.id to AssetMatchingEngine.recommend(
+                    expense = expense,
+                    assets = activeAssets,
+                    startYear = startYear,
+                    currentAge = effectiveProfile.currentAge,
+                )
+            }
+
             if (generation != calculationGeneration) return@launch
 
             _uiState.update {
                 it.copy(
                     projection = projection,
                     baselineProjection = baselineProjection,
+                    expenseMatches = expenseMatches,
                     isCalculating = false,
                 )
             }

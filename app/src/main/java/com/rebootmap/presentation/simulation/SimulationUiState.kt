@@ -4,6 +4,8 @@ import com.rebootmap.domain.model.Asset
 import com.rebootmap.domain.model.CashFlowProjection
 import com.rebootmap.domain.model.EconomicAssumptions
 import com.rebootmap.domain.model.UserProfile
+import com.rebootmap.domain.matching.AssetSuggestion
+import com.rebootmap.domain.milestone.LumpSumExpense
 import com.rebootmap.domain.preset.AgeBasedPreset
 import com.rebootmap.domain.scenario.RelocationPlan
 
@@ -13,6 +15,8 @@ data class SimulationUiState(
     val assumptions: EconomicAssumptions = EconomicAssumptions(),
     val assets: List<Asset> = emptyList(),
     val relocationPlan: RelocationPlan = RelocationPlan(),
+    val lumpSumExpenses: List<LumpSumExpense> = emptyList(),
+    val expenseMatches: Map<String, List<AssetSuggestion>> = emptyMap(),
     val projection: CashFlowProjection? = null,
     val baselineProjection: CashFlowProjection? = null,
     val isCalculating: Boolean = false,
@@ -21,6 +25,7 @@ data class SimulationUiState(
     val expandedAssetIds: Set<String> = emptySet(),
     val isBasicInfoExpanded: Boolean = false,
     val isRelocationExpanded: Boolean = false,
+    val isMilestoneExpanded: Boolean = false,
     val isLoading: Boolean = true,
 ) {
     val investmentAsset: Asset.Investment?

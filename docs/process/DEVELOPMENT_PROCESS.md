@@ -1,6 +1,7 @@
 # 개발·테스트·문서 관리 프로세스
 
-> Reboot Map 프로젝트의 Phase 단위 개발 표준 절차
+> Reboot Map 프로젝트의 Phase 단위 개발 표준 절차  
+> **신규 프로젝트 공통 가이드:** [`DEVELOPMENT_FLOW_GUIDE.md`](DEVELOPMENT_FLOW_GUIDE.md)
 
 ---
 

@@ -1,5 +1,6 @@
 package com.rebootmap.data.mapper
 
+import com.rebootmap.data.model.PersistedLumpSumExpense
 import com.rebootmap.data.model.SimulationPersistedState
 import com.rebootmap.domain.model.Asset
 import com.rebootmap.domain.model.InvestmentDefaults
@@ -68,6 +69,7 @@ object SimulationStateMapper {
             housingPensionEnabled = housingPension?.enabled ?: false,
             housingPensionStartAge = housingPension?.startAge ?: 0,
             housingPensionHomeEquity = housingPension?.homeEquityOverride ?: 0L,
+            lumpSumExpenses = state.lumpSumExpenses.map(PersistedLumpSumExpense::fromDomain),
         )
     }
 
@@ -141,6 +143,7 @@ object SimulationStateMapper {
             } else {
                 null
             },
+            lumpSumExpenses = persisted.lumpSumExpenses.map { it.toDomain() },
         )
     }
 

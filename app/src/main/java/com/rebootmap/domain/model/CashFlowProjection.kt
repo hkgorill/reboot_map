@@ -1,5 +1,6 @@
 package com.rebootmap.domain.model
 
+import com.rebootmap.domain.milestone.LumpSumExpense
 import com.rebootmap.domain.scenario.RelocationPlan
 
 data class YearSnapshot(
@@ -77,4 +78,5 @@ data class SimulationInput(
     val assets: List<Asset>,
     val startYear: Int,
     val relocationPlan: RelocationPlan? = null,
+    val lumpSumExpenses: List<LumpSumExpense> = emptyList(),
 )

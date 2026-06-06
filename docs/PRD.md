@@ -11,7 +11,8 @@
 | 문서 | 설명 |
 |------|------|
 | [`docs/README.md`](README.md) | 문서 인덱스·Phase 현황 |
-| [`docs/process/DEVELOPMENT_PROCESS.md`](process/DEVELOPMENT_PROCESS.md) | 개발·테스트·커밋 프로세스 |
+| [`docs/process/DEVELOPMENT_FLOW_GUIDE.md`](process/DEVELOPMENT_FLOW_GUIDE.md) | **개발 Flow 가이드** (신규 프로젝트 재사용) |
+| [`docs/process/DEVELOPMENT_PROCESS.md`](process/DEVELOPMENT_PROCESS.md) | Reboot Map 운영·커밋 세부 규칙 |
 | [`docs/phases/PHASE-NN.md`](phases/) | Phase별 상세 명세 |
 | [`docs/reports/`](reports/) | Phase별 테스트 리포트 |
 
@@ -255,20 +256,20 @@ netCashFlow = annualIncome - annualExpense - annualTax
 
 ---
 
-### Phase 4 — 목돈 지출 + 리포트
+### Phase 4 — 목돈 지출 + 리포트 ✅ (코드 완료 · 실기기 일괄 대기)
 
-> 상세: [`phases/PHASE-04.md`](phases/PHASE-04.md)
+> 상세: [`phases/PHASE-04.md`](phases/PHASE-04.md) · 테스트: [`reports/phase-04-test-report.md`](reports/phase-04-test-report.md)
 
 **목표:** 생애주기 대형 지출 방어 + PDF 리포트
 
 **산출물**
-- 목돈 지출 타임라인 (드래그 앤 드롭)
-- 자산 매칭 추천 알고리즘
-- PDF 컨설팅 리포트 생성·공유
+- [x] 목돈 지출 타임라인 (연도 레일 + ± 조정)
+- [x] 자산 매칭 추천 알고리즘
+- [x] PDF 컨설팅 리포트 생성·공유
 
 **완료 기준**
-1. 목돈 이벤트 배치 시 현금흐름 재계산
-2. PDF 생성 및 공유 동작
+1. 목돈 이벤트 배치 시 현금흐름 재계산 — 52건 PASS
+2. PDF 생성 및 공유 동작 — 실기기 확인 대기
 
 ---
 
@@ -349,4 +350,4 @@ netCashFlow = annualIncome - annualExpense - annualTax
 
 ---
 
-*다음 단계: Phase 4 (목돈 타임라인·PDF 리포트) — Phase 3 코드 완료, 실기기는 Phase 4 후 일괄 검증*
+*다음 단계: 2026-06-07 Phase 3·4 실기기 정식 일괄 검증 — MVP 코드·1차 보완 완료*

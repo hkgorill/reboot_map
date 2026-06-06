@@ -39,6 +39,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -53,9 +54,11 @@ import com.rebootmap.presentation.components.IntInputField
 import com.rebootmap.presentation.components.ManWonInputField
 import com.rebootmap.presentation.components.PercentInputField
 import com.rebootmap.presentation.simulation.AssetCardFields
+import com.rebootmap.presentation.simulation.MilestoneTimelineCard
 import com.rebootmap.presentation.simulation.PresetHints
 import com.rebootmap.presentation.simulation.RelocationScenarioCard
 import com.rebootmap.presentation.simulation.ResultSummaryCard
+import com.rebootmap.presentation.report.SimulationPdfExporter
 import com.rebootmap.presentation.simulation.SimulationViewModel
 import com.rebootmap.presentation.simulation.displayTitle
 import com.rebootmap.presentation.simulation.summaryText
@@ -64,6 +67,7 @@ import com.rebootmap.presentation.simulation.summaryText
 @Composable
 fun DashboardScreen(viewModel: SimulationViewModel) {
     val state by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
     var showMenu by remember { mutableStateOf(false) }
     var showResetDialog by remember { mutableStateOf(false) }
 
@@ -102,6 +106,13 @@ fun DashboardScreen(viewModel: SimulationViewModel) {
                         onDismissRequest = { showMenu = false },
                     ) {
                         DropdownMenuItem(
+                            text = { Text("PDF 리포트 공유") },
+                            onClick = {
+                                showMenu = false
+                                SimulationPdfExporter.exportAndShare(context, state)
+                            },
+                        )
+                        DropdownMenuItem(
                             text = { Text("입력 정보 초기화") },
                             onClick = {
                                 showMenu = false
@@ -136,6 +147,19 @@ fun DashboardScreen(viewModel: SimulationViewModel) {
                         baselineProjection = state.baselineProjection.takeIf { state.showComparison },
                     )
                 }
+            }
+
+            item {
+                MilestoneTimelineCard(
+                    expenses = state.lumpSumExpenses,
+                    expenseMatches = state.expenseMatches,
+                    currentAge = state.profile.currentAge,
+                    expanded = state.isMilestoneExpanded,
+                    onToggle = viewModel::toggleMilestoneExpanded,
+                    onAdd = viewModel::addLumpSumExpense,
+                    onUpdate = viewModel::updateLumpSumExpense,
+                    onRemove = viewModel::removeLumpSumExpense,
+                )
             }
 
             item {

@@ -1,5 +1,6 @@
 package com.rebootmap.domain.engine
 
+import com.rebootmap.domain.milestone.LumpSumExpense
 import com.rebootmap.domain.model.Asset
 import com.rebootmap.domain.model.EconomicAssumptions
 import com.rebootmap.domain.model.SimulationInput
@@ -19,11 +20,13 @@ class CashFlowEngineTest {
         profile: UserProfile = UserProfile(),
         assumptions: EconomicAssumptions = EconomicAssumptions(),
         assets: List<Asset> = emptyList(),
+        lumpSumExpenses: List<LumpSumExpense> = emptyList(),
     ) = SimulationInput(
         profile = profile,
         assumptions = assumptions,
         assets = assets,
         startYear = baseYear,
+        lumpSumExpenses = lumpSumExpenses,
     )
 
     @Test
@@ -502,5 +505,33 @@ class CashFlowEngineTest {
 
         assertEquals(0L, at64.annualIncome)
         assertTrue(at65.annualIncome > 0)
+    }
+
+    @Test
+    fun `T25 - 목돈 지출 연도에 자산이 차감된다`() {
+        val profile = UserProfile(
+            currentAge = 58,
+            retirementAge = 58,
+            lifeExpectancy = 62,
+            monthlyLivingExpense = 1_000_000L,
+        )
+        val assets = listOf(
+            Asset.Investment(currentValue = 100_000_000L, annualReturnRate = 0.0),
+        )
+        val expense = LumpSumExpense(
+            label = "자녀 결혼",
+            amount = 20_000_000L,
+            year = baseYear,
+        )
+
+        val baseline = engine.project(input(profile = profile, assets = assets))
+        val withExpense = engine.project(
+            input(profile = profile, assets = assets, lumpSumExpenses = listOf(expense)),
+        )
+
+        val baselineBalance = baseline.yearlySnapshots.first { it.year == baseYear }.endingBalance
+        val withExpenseBalance = withExpense.yearlySnapshots.first { it.year == baseYear }.endingBalance
+
+        assertEquals(baselineBalance - 20_000_000L, withExpenseBalance)
     }
 }

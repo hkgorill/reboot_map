@@ -183,29 +183,32 @@ class CashFlowEngine {
 
             val incomeGap = annualIncome - annualExpense - annualTax
             if (incomeGap < 0) {
-                val deficit = -incomeGap
-                val fromInvestment = investmentValue.coerceAtMost(deficit)
-                investmentValue -= fromInvestment
-                val remainingDeficit = deficit - fromInvestment
-
-                val fromSeverance = severanceBalances.values.sum().coerceAtMost(remainingDeficit)
-                if (fromSeverance > 0) {
-                    distributeWithdrawal(severanceBalances, fromSeverance)
-                }
-                val afterSeverance = remainingDeficit - fromSeverance
-                val fromPersonal = personalBalances.values.sum().coerceAtMost(afterSeverance)
-                if (fromPersonal > 0) {
-                    distributeWithdrawal(personalBalances, fromPersonal)
-                }
-                val afterPersonal = afterSeverance - fromPersonal
-                val fromLiquid = liquidBalance.coerceAtMost(afterPersonal)
-                liquidBalance -= fromLiquid
-                val uncoveredDeficit = afterPersonal - fromLiquid
-                if (uncoveredDeficit > 0) {
-                    liquidBalance -= uncoveredDeficit
-                }
+                val result = applyOutflow(
+                    amount = -incomeGap,
+                    investmentValue = investmentValue,
+                    severanceBalances = severanceBalances,
+                    personalBalances = personalBalances,
+                    liquidBalance = liquidBalance,
+                )
+                investmentValue = result.investmentValue
+                liquidBalance = result.liquidBalance
             } else {
                 liquidBalance += incomeGap
+            }
+
+            val lumpSumOutflow = input.lumpSumExpenses
+                .filter { it.year == year }
+                .sumOf { it.amount }
+            if (lumpSumOutflow > 0) {
+                val result = applyOutflow(
+                    amount = lumpSumOutflow,
+                    investmentValue = investmentValue,
+                    severanceBalances = severanceBalances,
+                    personalBalances = personalBalances,
+                    liquidBalance = liquidBalance,
+                )
+                investmentValue = result.investmentValue
+                liquidBalance = result.liquidBalance
             }
 
             if (relocationSchedule?.purchaseYear == year && !newHomeOwned) {
@@ -293,6 +296,56 @@ class CashFlowEngine {
         return RelocationSchedule(
             purchaseYear = purchaseYear,
             newHomeEquity = plan.newHomeEquity,
+        )
+    }
+
+    private data class OutflowResult(
+        val investmentValue: Long,
+        val liquidBalance: Long,
+    )
+
+    private fun applyOutflow(
+        amount: Long,
+        investmentValue: Long,
+        severanceBalances: MutableMap<Asset.SeverancePension, Long>,
+        personalBalances: MutableMap<Asset.PersonalPension, Long>,
+        liquidBalance: Long,
+    ): OutflowResult {
+        if (amount <= 0) {
+            return OutflowResult(investmentValue = investmentValue, liquidBalance = liquidBalance)
+        }
+
+        var remaining = amount
+        var updatedInvestment = investmentValue
+        var updatedLiquid = liquidBalance
+
+        val fromInvestment = updatedInvestment.coerceAtMost(remaining)
+        updatedInvestment -= fromInvestment
+        remaining -= fromInvestment
+
+        val fromSeverance = severanceBalances.values.sum().coerceAtMost(remaining)
+        if (fromSeverance > 0) {
+            distributeWithdrawal(severanceBalances, fromSeverance)
+        }
+        remaining -= fromSeverance
+
+        val fromPersonal = personalBalances.values.sum().coerceAtMost(remaining)
+        if (fromPersonal > 0) {
+            distributeWithdrawal(personalBalances, fromPersonal)
+        }
+        remaining -= fromPersonal
+
+        val fromLiquid = updatedLiquid.coerceAtMost(remaining)
+        updatedLiquid -= fromLiquid
+        remaining -= fromLiquid
+
+        if (remaining > 0) {
+            updatedLiquid -= remaining
+        }
+
+        return OutflowResult(
+            investmentValue = updatedInvestment,
+            liquidBalance = updatedLiquid,
         )
     }
 

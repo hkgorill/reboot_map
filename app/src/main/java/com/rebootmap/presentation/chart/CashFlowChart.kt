@@ -21,7 +21,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -76,17 +79,24 @@ fun CashFlowChartCard(
         index < baselineSnapshots.size &&
             snapshots[index].endingBalance != baselineSnapshots[index].endingBalance
     }
-    val chartKey = remember(projection, baselineProjection) {
-        projection.yearlySnapshots.hashCode() to baselineProjection?.yearlySnapshots.hashCode()
-    }
-    val modelProducer = remember(chartKey) { ChartEntryModelProducer() }
+    val modelProducer = remember { ChartEntryModelProducer() }
+    var chartEntriesReady by remember { mutableStateOf(false) }
 
-    LaunchedEffect(chartKey) {
-        if (showComparison) return@LaunchedEffect
+    LaunchedEffect(snapshots, showComparison) {
+        if (showComparison) {
+            chartEntriesReady = true
+            return@LaunchedEffect
+        }
+        if (snapshots.isEmpty()) {
+            chartEntriesReady = false
+            return@LaunchedEffect
+        }
+        chartEntriesReady = false
         val entries = snapshots.mapIndexed { index, snapshot ->
             entryOf(index.toFloat(), snapshot.endingBalance / 10_000f)
         }
         modelProducer.setEntriesSuspending(entries)
+        chartEntriesReady = true
     }
 
     Card(
@@ -132,7 +142,7 @@ fun CashFlowChartCard(
                         .fillMaxWidth()
                         .height(220.dp),
                 )
-            } else {
+            } else if (chartEntriesReady) {
                 ProvideChartStyle {
                     Chart(
                         chart = lineChart(
@@ -158,6 +168,19 @@ fun CashFlowChartCard(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(220.dp),
+                    )
+                }
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(220.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = "차트 갱신 중…",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
