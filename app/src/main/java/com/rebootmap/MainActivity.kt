@@ -8,8 +8,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.rebootmap.presentation.simulation.SimulationScreen
+import com.rebootmap.presentation.navigation.RebootMapApp
 import com.rebootmap.presentation.simulation.SimulationViewModel
+import com.rebootmap.presentation.simulation.SimulationViewModelFactory
 import com.rebootmap.presentation.theme.RebootMapTheme
 
 class MainActivity : ComponentActivity() {
@@ -19,7 +20,11 @@ class MainActivity : ComponentActivity() {
         setContent {
             RebootMapTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    SimulationScreen(viewModel = viewModel<SimulationViewModel>())
+                    RebootMapApp(
+                        viewModel = viewModel(
+                            factory = SimulationViewModelFactory(application),
+                        ),
+                    )
                 }
             }
         }

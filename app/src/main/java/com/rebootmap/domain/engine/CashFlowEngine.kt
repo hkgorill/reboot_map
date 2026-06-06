@@ -9,7 +9,6 @@ import kotlin.math.roundToLong
 
 /**
  * 세후 현금흐름을 연 단위로 시뮬레이션하는 순수 계산 엔진.
- * Android Framework에 의존하지 않습니다.
  */
 class CashFlowEngine {
 
@@ -19,17 +18,24 @@ class CashFlowEngine {
         val startYear = input.startYear
         val endYear = startYear + (profile.lifeExpectancy - profile.currentAge)
 
-        val retirementPensions = input.assets.filterIsInstance<Asset.RetirementPension>()
+        val severancePensions = input.assets.filterIsInstance<Asset.SeverancePension>()
+        val personalPensions = input.assets.filterIsInstance<Asset.PersonalPension>()
+        val yellowUmbrellas = input.assets.filterIsInstance<Asset.YellowUmbrella>()
         val nationalPensions = input.assets.filterIsInstance<Asset.NationalPension>()
         val investments = input.assets.filterIsInstance<Asset.Investment>()
         val cashSavings = input.assets.filterIsInstance<Asset.CashSavings>()
+        val fixedIncomes = input.assets.filterIsInstance<Asset.FixedIncome>()
         val realEstates = input.assets.filterIsInstance<Asset.RealEstate>()
 
-        val pensionBalances = retirementPensions.associateWith { it.balance }.toMutableMap()
+        val severanceBalances = severancePensions.associateWith { it.balance }.toMutableMap()
+        val personalBalances = personalPensions.associateWith { it.balance }.toMutableMap()
+        val yellowBalances = yellowUmbrellas.associateWith { it.balance }.toMutableMap()
+
         var investmentValue = investments.sumOf { it.currentValue }
         val investmentRate = investments.firstOrNull()?.annualReturnRate ?: 0.0
         val soldRealEstates = mutableSetOf<String>()
         val maturedSavings = mutableSetOf<String>()
+        val paidYellowUmbrellas = mutableSetOf<String>()
 
         var liquidBalance = 0L
         val snapshots = mutableListOf<YearSnapshot>()
@@ -38,19 +44,48 @@ class CashFlowEngine {
 
         for (year in startYear..endYear) {
             val age = profile.currentAge + (year - startYear)
-            var annualIncome = 0L
             var pensionIncome = 0L
             var otherIncome = 0L
 
-            retirementPensions.forEach { pension ->
-                val balance = pensionBalances.getValue(pension)
+            severancePensions.forEach { pension ->
+                val balance = severanceBalances.getValue(pension)
                 if (age < pension.contributionEndAge) {
-                    pensionBalances[pension] = balance + pension.monthlyContribution * 12
+                    val contributed = balance + pension.monthlyContribution * 12
+                    severanceBalances[pension] = applyReturn(contributed, pension.annualReturnRate)
                 } else if (age >= profile.retirementAge && balance > 0) {
                     val yearsRemaining = (profile.lifeExpectancy - age).coerceAtLeast(1)
                     val withdrawal = balance / yearsRemaining
-                    pensionBalances[pension] = balance - withdrawal
+                    severanceBalances[pension] = balance - withdrawal
                     pensionIncome += withdrawal
+                }
+            }
+
+            personalPensions.forEach { pension ->
+                val balance = personalBalances.getValue(pension)
+                if (age < pension.contributionEndAge) {
+                    val contributed = balance + pension.monthlyContribution * 12
+                    personalBalances[pension] = applyReturn(contributed, pension.annualReturnRate)
+                } else if (age >= pension.payoutStartAge && balance > 0) {
+                    val yearsRemaining = (profile.lifeExpectancy - age).coerceAtLeast(1)
+                    val withdrawal = balance / yearsRemaining
+                    personalBalances[pension] = balance - withdrawal
+                    pensionIncome += withdrawal
+                }
+            }
+
+            yellowUmbrellas.forEach { umbrella ->
+                if (umbrella.id in paidYellowUmbrellas) return@forEach
+                val balance = yellowBalances.getValue(umbrella)
+                if (age < umbrella.payoutAge) {
+                    var updated = applyReturn(balance, umbrella.annualReturnRate)
+                    if (age < umbrella.contributionEndAge) {
+                        updated += umbrella.monthlyContribution * 12
+                    }
+                    yellowBalances[umbrella] = updated
+                } else if (balance > 0) {
+                    otherIncome += balance
+                    yellowBalances[umbrella] = 0L
+                    paidYellowUmbrellas.add(umbrella.id)
                 }
             }
 
@@ -74,11 +109,17 @@ class CashFlowEngine {
                 }
             }
 
-            if (investmentValue > 0 && investmentRate != 0.0) {
-                investmentValue = (investmentValue * (1.0 + investmentRate)).roundToLong()
+            fixedIncomes.forEach { income ->
+                if (age in income.startAge..income.endAge) {
+                    otherIncome += income.monthlyAmount * 12
+                }
             }
 
-            annualIncome = pensionIncome + otherIncome
+            if (investmentValue > 0 && investmentRate != 0.0) {
+                investmentValue = applyReturn(investmentValue, investmentRate)
+            }
+
+            val annualIncome = pensionIncome + otherIncome
 
             val annualExpense = if (age >= profile.retirementAge) {
                 inflatedAnnualExpense(
@@ -98,32 +139,38 @@ class CashFlowEngine {
                 annualTax += (otherIncome * assumptions.generalIncomeTaxRate).roundToLong()
             }
 
-            var netCashFlow = annualIncome - annualExpense - annualTax
-
-            if (netCashFlow < 0) {
-                val deficit = -netCashFlow
+            val incomeGap = annualIncome - annualExpense - annualTax
+            if (incomeGap < 0) {
+                val deficit = -incomeGap
                 val fromInvestment = investmentValue.coerceAtMost(deficit)
                 investmentValue -= fromInvestment
                 val remainingDeficit = deficit - fromInvestment
 
-                val totalPensionBalance = pensionBalances.values.sum()
-                val fromPension = totalPensionBalance.coerceAtMost(remainingDeficit)
-                if (fromPension > 0) {
-                    distributeWithdrawal(pensionBalances, fromPension)
+                val fromSeverance = severanceBalances.values.sum().coerceAtMost(remainingDeficit)
+                if (fromSeverance > 0) {
+                    distributeWithdrawal(severanceBalances, fromSeverance)
                 }
-
-                val fromLiquid = liquidBalance.coerceAtMost(remainingDeficit - fromPension)
+                val afterSeverance = remainingDeficit - fromSeverance
+                val fromPersonal = personalBalances.values.sum().coerceAtMost(afterSeverance)
+                if (fromPersonal > 0) {
+                    distributeWithdrawal(personalBalances, fromPersonal)
+                }
+                val afterPersonal = afterSeverance - fromPersonal
+                val fromLiquid = liquidBalance.coerceAtMost(afterPersonal)
                 liquidBalance -= fromLiquid
-
-                netCashFlow = annualIncome - annualExpense - annualTax - deficit
+                val uncoveredDeficit = afterPersonal - fromLiquid
+                if (uncoveredDeficit > 0) {
+                    liquidBalance -= uncoveredDeficit
+                }
             } else {
-                liquidBalance += netCashFlow
-                netCashFlow = 0L
+                liquidBalance += incomeGap
             }
 
             val totalAssets = liquidBalance +
                 investmentValue +
-                pensionBalances.values.sum() +
+                severanceBalances.values.sum() +
+                personalBalances.values.sum() +
+                yellowBalances.values.sum() +
                 unsoldRealEstateValue(realEstates, soldRealEstates)
 
             val endingBalance = totalAssets
@@ -157,6 +204,11 @@ class CashFlowEngine {
         )
     }
 
+    private fun applyReturn(amount: Long, rate: Double): Long {
+        if (amount <= 0 || rate == 0.0) return amount
+        return (amount * (1.0 + rate)).roundToLong()
+    }
+
     private fun inflatedAnnualExpense(
         monthlyExpense: Long,
         inflationRate: Double,
@@ -173,8 +225,8 @@ class CashFlowEngine {
         .filter { it.id !in sold }
         .sumOf { it.netEquity }
 
-    private fun distributeWithdrawal(
-        balances: MutableMap<Asset.RetirementPension, Long>,
+    private fun <T> distributeWithdrawal(
+        balances: MutableMap<T, Long>,
         amount: Long,
     ) {
         val total = balances.values.sum()

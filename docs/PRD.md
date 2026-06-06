@@ -2,9 +2,18 @@
 
 > **프로젝트명:** Reboot Map (가칭)  
 > **플랫폼:** Android (Kotlin)  
-> **버전:** MVP v1.0  
+> **버전:** `1.1.0-phase2`  
 > **작성일:** 2026-06-06  
 > **개발 방식:** Phase 단위 개발 → 단위/회귀 테스트 → 실기기 검증 게이트
+
+### 관련 문서
+
+| 문서 | 설명 |
+|------|------|
+| [`docs/README.md`](README.md) | 문서 인덱스·Phase 현황 |
+| [`docs/process/DEVELOPMENT_PROCESS.md`](process/DEVELOPMENT_PROCESS.md) | 개발·테스트·커밋 프로세스 |
+| [`docs/phases/PHASE-NN.md`](phases/) | Phase별 상세 명세 |
+| [`docs/reports/`](reports/) | Phase별 테스트 리포트 |
 
 ---
 
@@ -63,23 +72,27 @@ com.rebootmap/
 
 ### 3.3 자산 (`Asset` — sealed class)
 
-```kotlin
-sealed class Asset {
-  data class RealEstate(val currentValue: Long, val saleYear: Int?) : Asset()
-  data class NationalPension(val monthlyPayout: Long, val startAge: Int = 65) : Asset()
-  data class RetirementPension(val balance: Long, val monthlyContribution: Long, val contributionEndAge: Int) : Asset()
-  data class Investment(val currentValue: Long, val annualReturnRate: Double) : Asset()
-  data class CashSavings(val maturityAmount: Long, val maturityYear: Int) : Asset()
-}
-```
+| 유형 | 설명 |
+|------|------|
+| `RealEstate` | 시세·부채·매각 연도 (순자산 기준 매각) |
+| `NationalPension` | 예상 월 수령액·수령 시작 연령 |
+| `SeverancePension` | 퇴직연금 (DC·IRP) — 적립·운용수익·은퇴 후 균등 인출 |
+| `PersonalPension` | 개인연금 (연금저축·IRP) — 55세~ 수령 개시 |
+| `YellowUmbrella` | 노랑우산공제 — 공제이자 복리·일시금 수령 |
+| `Investment` | 주식·재테크 — 복리 성장·적자 시 인출 |
+| `CashSavings` | 현금·적금 — 만기 일시 유입 |
+| `FixedIncome` | 고정수입 (임대료·급여) — 연령 구간별 월 수입 |
+
+기본 투자 수익률: **5%** (`InvestmentDefaults.DEFAULT_RETURN_RATE`)
 
 ### 3.4 시뮬레이션 결과 (`CashFlowProjection`)
 
 | 필드 | 설명 |
 |------|------|
 | yearlySnapshots | 연도별 스냅샷 리스트 |
-| depletionYear | 자산 고갈 연도 (null = 고갈 없음) |
-| deficitYears | 생활비 대비 적자 발생 연도 목록 |
+| depletionYear | 총자산 **0 이하** 최초 연도 (null = 기대 수명까지 유지) |
+| deficitYears | **수입 부족** 연도 — 연금·기타수입 < 생활비+세금 (투자 수익 미반영) |
+| assetDeclineYears() | **실제 자산 감소** 연도 — 전년 대비 총자산 감소 (투자·연금 잔액 반영) |
 
 **연도별 스냅샷 (`YearSnapshot`)**
 
@@ -105,11 +118,14 @@ sealed class Asset {
 
 ### 4.2 연간 수입 계산
 
-1. **국민연금:** `startAge` 이후 `monthlyPayout × 12` (물가 연동 없음, 고정)
-2. **퇴직연금:** `contributionEndAge`까지 `monthlyContribution × 12` 적립, 이후 잔액을 균등 인출 (잔여 수명 기준)
-3. **투자(주식/재테크):** `currentValue × (1 + annualReturnRate)^n` 복리 성장, 은퇴 후 매년 일정 비율 인출 가능 (MVP: 은퇴 시점부터 균등 인출)
-4. **현금/적금:** `maturityYear`에 `maturityAmount` 일시 유입
-5. **부동산:** `saleYear`에 `currentValue` 일시 유입 (MVP: 시세 고정, 상승률 Phase 3)
+1. **국민연금:** `startAge` 이후 `monthlyPayout × 12` (연금소득세)
+2. **퇴직연금:** 납입 종료 전 적립+운용(3%), 은퇴 후 잔액 균등 인출
+3. **개인연금:** 납입 종료 전 적립+운용(3%), `payoutStartAge` 이후 균등 인출
+4. **노랑우산:** 공제이자(3.3%) 복리, `payoutAge`에 일시금 (일반소득세)
+5. **투자:** 연 복리 성장, 적자 시 우선 인출
+6. **현금/적금:** `maturityYear`에 일시 유입
+7. **부동산:** `saleYear`에 순자산 일시 유입
+8. **고정수입:** `startAge~endAge` 구간 `monthlyAmount × 12` (일반소득세)
 
 ### 4.3 연간 지출 계산
 
@@ -131,13 +147,19 @@ annualExpense(year) = monthlyLivingExpense × 12 × (1 + inflationRate)^(year - 
 ```
 annualTax = Σ(incomeType × applicableRate)
 netCashFlow = annualIncome - annualExpense - annualTax
-endingBalance = previousBalance + netCashFlow
 ```
+
+적자 시 투자·연금·현금 순으로 인출, **미충당 적자는 부채(마이너스 잔액)로 누적**.
 
 ### 4.5 경고 판정
 
-- **적자 연도:** `netCashFlow < 0` 또는 `endingBalance < 0`
-- **고갈 시점:** `endingBalance <= 0`이 최초 발생한 연도
+| 지표 | 기준 |
+|------|------|
+| **자산 고갈** | `endingBalance <= 0` 최초 연도 |
+| **수입 부족** | 은퇴 후 `annualIncome - annualExpense - annualTax < 0` |
+| **실제 자산 감소** | 은퇴 후 전년 대비 `endingBalance` 감소 (차트·타임라인 빨간색) |
+
+> 수입 부족 연수와 자산 감소 연수는 다를 수 있음 (투자 수익·연금 인출·적립 잔액 변동 반영).
 
 ---
 
@@ -154,8 +176,8 @@ endingBalance = previousBalance + netCashFlow
 
 | Phase | 화면 |
 |-------|------|
-| 1 | 기본정보 폼 + 4대 자산 입력 폼 + 결과 요약 카드 |
-| 2 | 온보딩 3문항 + 자산 카드 + 실시간 차트 + 적자 경고 |
+| 1 | 기본정보 폼 + 자산 입력 폼 + 결과 요약 카드 |
+| 2 | 온보딩 + 대시보드 + Vico 차트 + 수익률 시뮬레이션(±0.5%p) + 8종 자산 카드 |
 | 3 | 부동산 시나리오 탭 + 절세 비교 + 주택연금 시뮬 |
 | 4 | 목돈 타임라인 + 자산 매칭 + PDF 리포트 |
 
@@ -163,7 +185,9 @@ endingBalance = previousBalance + netCashFlow
 
 ## 6. Phase별 개발 계획 및 완료 기준
 
-### Phase 1 — 핵심 계산 엔진 + 기본 입력 UI ⬅ **현재**
+### Phase 1 — 핵심 계산 엔진 + 기본 입력 UI ✅
+
+> 상세: [`phases/PHASE-01.md`](phases/PHASE-01.md) · 테스트: [`reports/phase-01-test-report.md`](reports/phase-01-test-report.md)
 
 **목표:** Pure Logic 계산 + 기본 입력 → 결과 요약
 
@@ -188,7 +212,9 @@ endingBalance = previousBalance + netCashFlow
 
 ---
 
-### Phase 2 — 실시간 시각화 + 대시보드
+### Phase 2 — 실시간 시각화 + 대시보드 ✅ (자체테스트 완료 · 실기기 대기)
+
+> 상세: [`phases/PHASE-02.md`](phases/PHASE-02.md) · 테스트: [`reports/phase-02-test-report.md`](reports/phase-02-test-report.md)
 
 **목표:** Progressive Disclosure + 인터랙티브 차트
 
@@ -209,6 +235,8 @@ endingBalance = previousBalance + netCashFlow
 
 ### Phase 3 — 부동산 유동화 + 절세 시나리오
 
+> 상세: [`phases/PHASE-03.md`](phases/PHASE-03.md)
+
 **목표:** 거주지 이동·양도세·주택연금 시뮬레이션
 
 **산출물**
@@ -225,6 +253,8 @@ endingBalance = previousBalance + netCashFlow
 ---
 
 ### Phase 4 — 목돈 지출 + 리포트
+
+> 상세: [`phases/PHASE-04.md`](phases/PHASE-04.md)
 
 **목표:** 생애주기 대형 지출 방어 + PDF 리포트
 
@@ -291,8 +321,10 @@ endingBalance = previousBalance + netCashFlow
 ## 10. 용어 정의
 
 - **세후 현금흐름:** 연간 수입 − 생활비 − 세금
-- **자산 고갈:** 누적 잔액이 0 이하가 되는 시점
-- **적자 구간:** 특정 연도에 순현금흐름이 음수인 기간
+- **자산 고갈:** 총자산이 0 이하가 되는 최초 시점
+- **수입 부족:** 연금·기타수입이 생활비+세금보다 적은 연도
+- **실제 자산 감소:** 전년 대비 총자산이 줄어든 연도 (타임라인 빨간색)
+- **예상 부채:** 자산 소진 후 미충당 생활비가 누적된 마이너스 잔액
 
 ---
 
@@ -310,7 +342,8 @@ endingBalance = previousBalance + netCashFlow
 | T08 | 물가 2% 10년 | 생활비 1.219배 |
 | T09 | 복합 자산 시나리오 | 전체 스냅샷 일관성 |
 | T10 | lifeExpectancy = retirementAge | 1년 시뮬 |
+| T16~T22 | 부채·연금3종·고정수입·자산감소 등 | Phase 2 확장 |
 
 ---
 
-*다음 단계: Phase 1 구현 착수 (계산 엔진 TDD → 기본 UI)*
+*다음 단계: Phase 2 실기기 게이트 → Phase 3 (부동산·절세)*

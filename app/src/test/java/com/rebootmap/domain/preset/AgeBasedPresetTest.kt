@@ -1,5 +1,6 @@
 package com.rebootmap.domain.preset
 
+import com.rebootmap.domain.model.Asset
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -13,7 +14,7 @@ class AgeBasedPresetTest {
         assertEquals(42, preset.profile.currentAge)
         assertEquals(300L * 10_000, preset.profile.monthlyLivingExpense)
 
-        val realEstate = preset.assets.filterIsInstance<com.rebootmap.domain.model.Asset.RealEstate>().first()
+        val realEstate = preset.assets.filterIsInstance<Asset.RealEstate>().first()
         assertEquals(50_000L * 10_000, realEstate.currentValue)
         assertEquals(17_500L * 10_000, realEstate.debtAmount)
         assertEquals(32_500L * 10_000, realEstate.netEquity)
@@ -24,18 +25,32 @@ class AgeBasedPresetTest {
         val thirties = AgeBasedPreset.forAge(35)
         val fifties = AgeBasedPreset.forAge(55)
 
-        val pension30 = thirties.assets.filterIsInstance<com.rebootmap.domain.model.Asset.NationalPension>().first()
-        val pension50 = fifties.assets.filterIsInstance<com.rebootmap.domain.model.Asset.NationalPension>().first()
+        val pension30 = thirties.assets.filterIsInstance<Asset.NationalPension>().first()
+        val pension50 = fifties.assets.filterIsInstance<Asset.NationalPension>().first()
 
         assertTrue(pension50.monthlyPayout > pension30.monthlyPayout)
     }
 
     @Test
-    fun `60대 이상은 퇴직연금 월 납입이 0이다`() {
+    fun `60대 이상은 퇴직연금과 개인연금 월 납입이 0이다`() {
         val preset = AgeBasedPreset.forAge(63)
-        val pension = preset.assets.filterIsInstance<com.rebootmap.domain.model.Asset.RetirementPension>().first()
+        val severance = preset.assets.filterIsInstance<Asset.SeverancePension>().first()
+        val personal = preset.assets.filterIsInstance<Asset.PersonalPension>().first()
+        val yellow = preset.assets.filterIsInstance<Asset.YellowUmbrella>().first()
 
-        assertEquals(0L, pension.monthlyContribution)
+        assertEquals(0L, severance.monthlyContribution)
+        assertEquals(0L, personal.monthlyContribution)
+        assertEquals(0L, yellow.monthlyContribution)
+    }
+
+    @Test
+    fun `프리셋은 연금 3종과 고정수입을 포함한다`() {
+        val preset = AgeBasedPreset.forAge(45)
+
+        assertEquals(1, preset.assets.filterIsInstance<Asset.SeverancePension>().size)
+        assertEquals(1, preset.assets.filterIsInstance<Asset.PersonalPension>().size)
+        assertEquals(1, preset.assets.filterIsInstance<Asset.YellowUmbrella>().size)
+        assertEquals(1, preset.assets.filterIsInstance<Asset.FixedIncome>().size)
     }
 
     @Test

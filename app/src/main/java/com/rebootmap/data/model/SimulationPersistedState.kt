@@ -1,0 +1,44 @@
+package com.rebootmap.data.model
+
+import com.rebootmap.domain.model.PensionDefaults
+import kotlinx.serialization.Serializable
+
+@Serializable
+data class SimulationPersistedState(
+    val onboardingCompleted: Boolean = false,
+    val currentAge: Int = 40,
+    val retirementAge: Int = 60,
+    val lifeExpectancy: Int = 90,
+    val monthlyLivingExpense: Long = 3_000_000L,
+    val inflationRate: Double = 0.02,
+    val pensionIncomeTaxRate: Double = 0.033,
+    val generalIncomeTaxRate: Double = 0.15,
+    val presetSourceNote: String = "",
+    val realEstateValue: Long = 0L,
+    val realEstateDebt: Long = 0L,
+    val realEstateSaleYear: Int? = null,
+    val nationalPensionMonthly: Long = 0L,
+    val nationalPensionStartAge: Int = 65,
+    val severancePensionBalance: Long = 0L,
+    val severancePensionMonthly: Long = 0L,
+    val severancePensionEndAge: Int = 60,
+    val personalPensionBalance: Long = 0L,
+    val personalPensionMonthly: Long = 0L,
+    val personalPensionEndAge: Int = 60,
+    val personalPensionPayoutAge: Int = PensionDefaults.PERSONAL_MIN_PAYOUT_AGE,
+    val yellowUmbrellaBalance: Long = 0L,
+    val yellowUmbrellaMonthly: Long = 0L,
+    val yellowUmbrellaEndAge: Int = 60,
+    val yellowUmbrellaPayoutAge: Int = 60,
+    /** v1 호환: 기존 퇴직·개인연금 통합 필드 */
+    val retirementPensionBalance: Long = 0L,
+    val retirementPensionMonthly: Long = 0L,
+    val retirementPensionEndAge: Int = 60,
+    val investmentValue: Long = 0L,
+    val investmentReturnRate: Double = 0.05,
+    val cashSavingsAmount: Long = 0L,
+    val cashSavingsYear: Int = 0,
+    val fixedIncomeMonthly: Long = 0L,
+    val fixedIncomeStartAge: Int = 60,
+    val fixedIncomeEndAge: Int = 90,
+)
