@@ -68,21 +68,25 @@ com.rebootmap/
 | 필드 | 타입 | 기본값 | 설명 |
 |------|------|--------|------|
 | inflationRate | Double | 0.02 | 연 물가상승률 |
-| pensionIncomeTaxRate | Double | 0.033 | 연금소득세 간이세율 (MVP) |
-| generalIncomeTaxRate | Double | 0.15 | 일반 소득 간이세율 (MVP) |
+| livingExpenseInflationBase | enum | RETIREMENT_AGE | 생활비 물가 기준 (Phase 4+) |
+| pensionIncomeTaxRate | Double | 0.033 | 연금소득세 간이세율 |
+| generalIncomeTaxRate | Double | 0.15 | 사업·기타 소득 간이세율 (Phase 5에서 분리) |
+| propertyTaxEnabled 등 | — | — | Phase 5 [`PHASE-05.md`](phases/PHASE-05.md) 참조 |
 
 ### 3.3 자산 (`Asset` — sealed class)
 
 | 유형 | 설명 |
 |------|------|
-| `RealEstate` | 시세·부채·매각 연도 (순자산 기준 매각) |
+| `RealEstate` | 시세·부채·매각 연도·예상 매각가 (CAGR 시세 추정, 순자산 매각) |
 | `NationalPension` | 예상 월 수령액·수령 시작 연령 |
 | `SeverancePension` | 퇴직연금 (DC·IRP) — 적립·운용수익·은퇴 후 균등 인출 |
 | `PersonalPension` | 개인연금 (연금저축·IRP) — 55세~ 수령 개시 |
 | `YellowUmbrella` | 노랑우산공제 — 공제이자 복리·일시금 수령 |
 | `Investment` | 주식·재테크 — 복리 성장·적자 시 인출 |
 | `CashSavings` | 현금·적금 — 만기 일시 유입 |
-| `FixedIncome` | 고정수입 (임대료·급여) — 연령 구간별 월 수입 |
+| `EmploymentIncome` | 직장 소득 — 연령 구간별 월 수입 |
+| `BusinessIncome` | 사업 소득 — 연령 구간별 월 수입 |
+| `OtherFixedIncome` | 기타 고정수입 (임대 등) — 연령 구간별 월 수입 |
 
 기본 투자 수익률: **5%** (`InvestmentDefaults.DEFAULT_RETURN_RATE`)
 
@@ -273,6 +277,27 @@ netCashFlow = annualIncome - annualExpense - annualTax
 
 ---
 
+### Phase 5 — 세금 정밀화 + 소득 유형 분리 ✅ (완료)
+
+> 상세: [`phases/PHASE-05.md`](phases/PHASE-05.md) · 테스트: [`reports/phase-05-test-report.md`](reports/phase-05-test-report.md)
+
+**목표:** 예측 가능한 보유·부과 세금 반영 + 직장/사업 소득 분리 입력
+
+**산출물**
+- [x] 직장 소득 · 사업 소득 · 기타 고정수입 (금액·시작/종료 연령)
+- [x] 재산세·종합부동산세 (보유, 간이)
+- [x] 건강보험료·장기요양 (지역가입자, 간이)
+- [x] 소득 유형별 세금 breakdown (UI·PDF)
+- [x] `FixedIncome` → `employmentIncome*` 마이그레이션
+- [x] 부동산 예상 매각가 · 연평균 시세 변동률 (CAGR)
+
+**완료 기준**
+1. 세목별 breakdown 합 = `annualTax` + 보유 부담 분리 표시 — 96건 PASS
+2. 세금·보험료 ON/OFF 및 회귀 테스트 PASS
+3. 실기기 체크리스트 완료 (2026-06-07)
+
+---
+
 ## 7. 테스트 전략
 
 ### 7.1 단위 테스트 (매 Phase)
@@ -350,4 +375,4 @@ netCashFlow = annualIncome - annualExpense - annualTax
 
 ---
 
-*다음 단계: 2026-06-07 Phase 3·4 실기기 정식 일괄 검증 — MVP 코드·1차 보완 완료*
+*다음 단계: Phase 3·4 실기기 일괄 검증 완료 후 **Phase 5 (P5-S1)** 개발 착수*

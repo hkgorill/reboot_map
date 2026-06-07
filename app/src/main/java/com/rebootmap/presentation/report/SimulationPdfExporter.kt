@@ -6,6 +6,8 @@ import android.graphics.Paint
 import android.graphics.pdf.PdfDocument
 import androidx.core.content.FileProvider
 import com.rebootmap.domain.model.CashFlowProjection
+import com.rebootmap.domain.model.YearSnapshot
+import com.rebootmap.domain.tax.AnnualTaxBreakdown
 import com.rebootmap.presentation.components.formatKoreanMan
 import com.rebootmap.presentation.simulation.SimulationUiState
 import java.io.File
@@ -109,6 +111,16 @@ object SimulationPdfExporter {
             lines += "기대 수명: ${profile.lifeExpectancy}세"
         }
         lines += "물가상승률: ${"%.1f".format(state.assumptions.inflationRate * 100)}%"
+        val expenseBase = when (state.assumptions.livingExpenseInflationBase) {
+            com.rebootmap.domain.model.LivingExpenseInflationBase.RETIREMENT_AGE -> "은퇴 시점 기준"
+            com.rebootmap.domain.model.LivingExpenseInflationBase.SIMULATION_START -> "현재부터 누적"
+        }
+        lines += "생활비 물가 기준: $expenseBase"
+        lines += "국민연금: 물가연동 · 퇴직·개인연금: 운용수익률 · 노랑우산: 공제이자 일시금"
+        val assumptions = state.assumptions
+        lines += "세금·보험 반영: 재산세 ${if (assumptions.propertyTaxEnabled) "ON" else "OFF"}, " +
+            "종부세 ${if (assumptions.comprehensiveRealEstateTaxEnabled) "ON" else "OFF"}, " +
+            "건보 ${if (assumptions.healthInsuranceEnabled) "ON" else "OFF"} (간이 추정)"
 
         projection?.let { appendProjection(lines, it, profile.retirementAge) }
 
@@ -156,6 +168,66 @@ object SimulationPdfExporter {
         }
         if (projection.deficitYears.isNotEmpty()) {
             lines += "수입 부족 연도: ${projection.yearSpanSummary(projection.deficitYears).headline}"
+        }
+
+        appendMonthlyTaxSummary(lines, projection, retirementAge)
+    }
+
+    private fun appendMonthlyTaxSummary(
+        lines: MutableList<String>,
+        projection: CashFlowProjection,
+        retirementAge: Int,
+    ) {
+        val milestoneAges = buildList {
+            add(retirementAge)
+            add(65)
+            add(70)
+            add(80)
+        }.distinct().sorted().filter { age ->
+            projection.yearlySnapshots.any { it.age == age }
+        }
+        if (milestoneAges.isEmpty()) return
+
+        lines += "## 월 현금흐름·세금 (연령별)"
+        milestoneAges.forEach { age ->
+            val snapshot = projection.yearlySnapshots.firstOrNull { it.age == age } ?: return@forEach
+            appendSnapshotCashFlow(lines, snapshot)
+        }
+    }
+
+    private fun appendSnapshotCashFlow(lines: MutableList<String>, snapshot: YearSnapshot) {
+        val monthlyIncome = snapshot.annualIncome / 12
+        val monthlyLiving = snapshot.annualLivingExpense / 12
+        val monthlyHolding = snapshot.annualHoldingCost.total / 12
+        val monthlyTax = snapshot.annualTax / 12
+        val monthlyNet = snapshot.netCashFlow / 12
+        lines += "${snapshot.age}세 — 수입 ${formatKoreanMan(monthlyIncome)}/월, " +
+            "생활비 ${formatKoreanMan(monthlyLiving)}/월, " +
+            "부과 ${formatKoreanMan(monthlyHolding)}/월, " +
+            "세금 ${formatKoreanMan(monthlyTax)}/월, " +
+            "순현금 ${formatKoreanMan(monthlyNet)}/월"
+        appendTaxBreakdownLines(lines, snapshot.taxBreakdown)
+        val holding = snapshot.annualHoldingCost
+        if (holding.propertyTax > 0) {
+            lines += "  · 재산세: ${formatKoreanMan(holding.propertyTax)}/년"
+        }
+        if (holding.comprehensiveRealEstateTax > 0) {
+            lines += "  · 종부세: ${formatKoreanMan(holding.comprehensiveRealEstateTax)}/년"
+        }
+    }
+
+    private fun appendTaxBreakdownLines(lines: MutableList<String>, breakdown: AnnualTaxBreakdown) {
+        val items = buildList {
+            if (breakdown.employmentIncomeTax > 0) add("근로소득세" to breakdown.employmentIncomeTax)
+            if (breakdown.businessIncomeTax > 0) add("사업소득세" to breakdown.businessIncomeTax)
+            if (breakdown.pensionIncomeTax > 0) add("연금소득세" to breakdown.pensionIncomeTax)
+            if (breakdown.otherIncomeTax > 0) add("기타소득세" to breakdown.otherIncomeTax)
+            if (breakdown.capitalGainsTax > 0) add("양도소득세" to breakdown.capitalGainsTax)
+            if (breakdown.healthInsurance > 0) add("건강보험료" to breakdown.healthInsurance)
+            if (breakdown.longTermCare > 0) add("장기요양보험" to breakdown.longTermCare)
+        }
+        items.forEach { (label, annual) ->
+            lines += "  · $label: ${formatKoreanMan(annual)}/년 (${formatKoreanMan(annual / 12)}/월)"
         }
     }
 

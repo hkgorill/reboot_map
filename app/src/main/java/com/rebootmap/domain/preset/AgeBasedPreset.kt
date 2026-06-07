@@ -74,6 +74,7 @@ data class AgeBasedPreset(
                         balance = bracket.severancePensionBalanceMan * MAN,
                         monthlyContribution = bracket.severancePensionMonthlyMan * MAN,
                         contributionEndAge = contributionEndAge,
+                        payoutStartAge = retirementAge,
                     ),
                     Asset.PersonalPension(
                         balance = bracket.personalPensionBalanceMan * MAN,
@@ -95,9 +96,19 @@ data class AgeBasedPreset(
                         maturityAmount = bracket.cashSavingsMan * MAN,
                         maturityYear = currentYear + bracket.cashMaturityYears,
                     ),
-                    Asset.FixedIncome(
+                    Asset.EmploymentIncome(
                         monthlyAmount = bracket.fixedIncomeMonthlyMan * MAN,
                         startAge = safeAge,
+                        endAge = retirementAge.coerceAtMost(lifeExpectancy),
+                    ),
+                    Asset.BusinessIncome(monthlyAmount = 0L, startAge = 0, endAge = 0),
+                    Asset.OtherFixedIncome(
+                        monthlyAmount = if (retirementAge < lifeExpectancy) {
+                            bracket.fixedIncomeMonthlyMan * MAN
+                        } else {
+                            0L
+                        },
+                        startAge = (retirementAge + 1).coerceAtMost(lifeExpectancy),
                         endAge = lifeExpectancy,
                     ),
                     Asset.HousingPension(enabled = false, startAge = 65),

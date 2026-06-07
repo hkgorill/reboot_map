@@ -3,6 +3,7 @@ package com.rebootmap.domain.engine
 import com.rebootmap.domain.milestone.LumpSumExpense
 import com.rebootmap.domain.model.Asset
 import com.rebootmap.domain.model.EconomicAssumptions
+import com.rebootmap.domain.model.LivingExpenseInflationBase
 import com.rebootmap.domain.model.SimulationInput
 import com.rebootmap.domain.model.UserProfile
 import org.junit.Assert.assertEquals
@@ -15,6 +16,13 @@ class CashFlowEngineTest {
 
     private val engine = CashFlowEngine()
     private val baseYear = 2026
+
+    /** Phase 5 이전 회귀 테스트용 — 보유세·건보 미반영 */
+    private val legacyAssumptions = EconomicAssumptions(
+        propertyTaxEnabled = false,
+        comprehensiveRealEstateTaxEnabled = false,
+        healthInsuranceEnabled = false,
+    )
 
     private fun input(
         profile: UserProfile = UserProfile(),
@@ -76,12 +84,69 @@ class CashFlowEngineTest {
             Asset.Investment(currentValue = 50_000_000L, annualReturnRate = 0.0),
         )
 
-        val result = engine.project(input(profile = profile, assets = assets))
+        val result = engine.project(
+            input(
+                profile = profile,
+                assets = assets,
+                assumptions = EconomicAssumptions(inflationRate = 0.0),
+            ),
+        )
         val at64 = result.yearlySnapshots.first { it.age == 64 }
         val at65 = result.yearlySnapshots.first { it.age == 65 }
 
         assertEquals(0L, at64.annualIncome)
         assertEquals(18_000_000L, at65.annualIncome)
+    }
+
+    @Test
+    fun `T03b - 국민연금 수령액은 시뮬 시작부터 물가상승이 반영된다`() {
+        val profile = UserProfile(
+            currentAge = 63,
+            retirementAge = 60,
+            lifeExpectancy = 66,
+            monthlyLivingExpense = 500_000L,
+        )
+        val assets = listOf(
+            Asset.NationalPension(monthlyPayout = 1_500_000L, startAge = 65),
+            Asset.Investment(currentValue = 50_000_000L, annualReturnRate = 0.0),
+        )
+
+        val result = engine.project(
+            input(
+                profile = profile,
+                assets = assets,
+                assumptions = EconomicAssumptions(inflationRate = 0.02),
+            ),
+        )
+        val at65 = result.yearlySnapshots.first { it.age == 65 }
+
+        assertEquals(18_727_200L, at65.annualIncome)
+    }
+
+    @Test
+    fun `T04a - 퇴직연금은 수령 개시 연령 전까지 인출되지 않는다`() {
+        val profile = UserProfile(
+            currentAge = 60,
+            retirementAge = 60,
+            lifeExpectancy = 70,
+            monthlyLivingExpense = 1_000_000L,
+        )
+        val assets = listOf(
+            Asset.SeverancePension(
+                balance = 100_000_000L,
+                monthlyContribution = 0L,
+                contributionEndAge = 60,
+                payoutStartAge = 65,
+            ),
+            Asset.Investment(currentValue = 50_000_000L, annualReturnRate = 0.0),
+        )
+
+        val result = engine.project(input(profile = profile, assets = assets))
+        val at64 = result.yearlySnapshots.first { it.age == 64 }
+        val at65 = result.yearlySnapshots.first { it.age == 65 }
+
+        assertEquals(0L, at64.annualIncome)
+        assertTrue(at65.annualIncome > 0L)
     }
 
     @Test
@@ -107,6 +172,22 @@ class CashFlowEngineTest {
         val at54 = result.yearlySnapshots.first { it.age == 54 }
 
         assertTrue(at54.totalAssets > at53.totalAssets)
+    }
+
+    @Test
+    fun `T04b - 유동·비유동·총자산 합계가 일치한다`() {
+        val profile = UserProfile(currentAge = 48, retirementAge = 60, lifeExpectancy = 55)
+        val assets = listOf(
+            Asset.RealEstate(currentValue = 300_000_000L, debtAmount = 50_000_000L, saleYear = null),
+            Asset.Investment(currentValue = 10_000_000L, annualReturnRate = 0.0),
+        )
+
+        val result = engine.project(input(profile = profile, assets = assets))
+        result.yearlySnapshots.forEach { snapshot ->
+            assertEquals(snapshot.liquidAssets + snapshot.illiquidAssets, snapshot.totalAssets)
+            assertEquals(snapshot.totalAssets, snapshot.endingBalance)
+        }
+        assertEquals(250_000_000L, result.yearlySnapshots.first().illiquidAssets)
     }
 
     @Test
@@ -157,13 +238,44 @@ class CashFlowEngineTest {
             Asset.RealEstate(currentValue = 500_000_000L, saleYear = baseYear + 1),
         )
 
-        val result = engine.project(input(profile = profile, assets = assets))
+        val result = engine.project(
+            input(profile = profile, assumptions = legacyAssumptions, assets = assets),
+        )
         val beforeSale = result.yearlySnapshots.first { it.year == baseYear }
         val saleYear = result.yearlySnapshots.first { it.year == baseYear + 1 }
 
         assertEquals(500_000_000L, beforeSale.totalAssets)
         assertEquals(500_000_000L, saleYear.annualIncome)
         assertTrue(result.yearlySnapshots.last().totalAssets > 0L)
+    }
+
+    @Test
+    fun `T07b - 예상 매각가에 따라 보유 중 순자산과 매각 수입이 연도별 반영된다`() {
+        val profile = UserProfile(
+            currentAge = 40,
+            retirementAge = 65,
+            lifeExpectancy = 46,
+            monthlyLivingExpense = 0L,
+        )
+        val assets = listOf(
+            Asset.RealEstate(
+                currentValue = 400_000_000L,
+                debtAmount = 100_000_000L,
+                saleYear = baseYear + 5,
+                expectedSalePrice = 500_000_000L,
+            ),
+        )
+
+        val result = engine.project(
+            input(profile = profile, assumptions = legacyAssumptions, assets = assets),
+        )
+        val year0 = result.yearlySnapshots.first { it.year == baseYear }
+        val year3 = result.yearlySnapshots.first { it.year == baseYear + 3 }
+        val sale = result.yearlySnapshots.first { it.year == baseYear + 5 }
+
+        assertEquals(300_000_000L, year0.illiquidAssets)
+        assertTrue(year3.illiquidAssets > year0.illiquidAssets)
+        assertEquals(400_000_000L, sale.annualIncome)
     }
 
     @Test
@@ -247,6 +359,52 @@ class CashFlowEngineTest {
     }
 
     @Test
+    fun `T08b - 생활비 물가는 은퇴 시점 기준이면 은퇴 직후 목표 금액과 같다`() {
+        val profile = UserProfile(
+            currentAge = 48,
+            retirementAge = 60,
+            lifeExpectancy = 70,
+            monthlyLivingExpense = 3_000_000L,
+        )
+        val assumptions = EconomicAssumptions(
+            inflationRate = 0.02,
+            livingExpenseInflationBase = LivingExpenseInflationBase.RETIREMENT_AGE,
+        )
+        val assets = listOf(
+            Asset.Investment(currentValue = 1_000_000_000L, annualReturnRate = 0.0),
+        )
+
+        val result = engine.project(input(profile = profile, assumptions = assumptions, assets = assets))
+        val at60 = result.yearlySnapshots.first { it.age == 60 }
+        val at70 = result.yearlySnapshots.first { it.age == 70 }
+
+        assertEquals(36_000_000L, at60.annualExpense)
+        assertEquals(43_883_799L, at70.annualExpense)
+    }
+
+    @Test
+    fun `T08c - 생활비 물가가 현재부터 누적이면 은퇴 전에도 물가가 반영된다`() {
+        val profile = UserProfile(
+            currentAge = 48,
+            retirementAge = 60,
+            lifeExpectancy = 62,
+            monthlyLivingExpense = 3_000_000L,
+        )
+        val assumptions = EconomicAssumptions(
+            inflationRate = 0.02,
+            livingExpenseInflationBase = LivingExpenseInflationBase.SIMULATION_START,
+        )
+        val assets = listOf(
+            Asset.Investment(currentValue = 1_000_000_000L, annualReturnRate = 0.0),
+        )
+
+        val result = engine.project(input(profile = profile, assumptions = assumptions, assets = assets))
+        val at60 = result.yearlySnapshots.first { it.age == 60 }
+
+        assertEquals(45_656_705L, at60.annualExpense)
+    }
+
+    @Test
     fun `T11 - 물가상승률 0퍼센트면 생활비가 고정된다`() {
         val profile = UserProfile(
             currentAge = 60,
@@ -297,10 +455,13 @@ class CashFlowEngineTest {
             Asset.NationalPension(monthlyPayout = 1_000_000L, startAge = 65),
         )
 
-        val result = engine.project(input(profile = profile, assets = assets))
+        val result = engine.project(
+            input(profile = profile, assumptions = legacyAssumptions, assets = assets),
+        )
         val snapshot = result.yearlySnapshots.first()
 
         assertEquals(396_000L, snapshot.annualTax)
+        assertEquals(396_000L, snapshot.taxBreakdown.pensionIncomeTax)
     }
 
     @Test
@@ -338,7 +499,9 @@ class CashFlowEngineTest {
             ),
         )
 
-        val result = engine.project(input(profile = profile, assets = assets))
+        val result = engine.project(
+            input(profile = profile, assumptions = legacyAssumptions, assets = assets),
+        )
         val beforeSale = result.yearlySnapshots.first { it.year == baseYear }
         val saleYear = result.yearlySnapshots.first { it.year == baseYear + 1 }
 
@@ -358,7 +521,9 @@ class CashFlowEngineTest {
             Asset.RealEstate(currentValue = 200_000_000L, saleYear = null),
         )
 
-        val result = engine.project(input(profile = profile, assets = assets))
+        val result = engine.project(
+            input(profile = profile, assumptions = legacyAssumptions, assets = assets),
+        )
 
         result.yearlySnapshots.forEach { snapshot ->
             assertEquals(200_000_000L, snapshot.totalAssets)
@@ -390,6 +555,73 @@ class CashFlowEngineTest {
 
         assertEquals(0L, at54.annualIncome)
         assertTrue(at55.annualIncome > 0)
+    }
+
+    @Test
+    fun `T19a - 월 순현금 흑자여도 연금 인출로 총자산은 줄어들 수 있다`() {
+        val profile = UserProfile(
+            currentAge = 60,
+            retirementAge = 60,
+            lifeExpectancy = 62,
+            monthlyLivingExpense = 2_000_000L,
+        )
+        val assets = listOf(
+            Asset.SeverancePension(
+                balance = 100_000_000L,
+                monthlyContribution = 0L,
+                contributionEndAge = 60,
+                payoutStartAge = 60,
+                annualReturnRate = 0.0,
+            ),
+        )
+
+        val result = engine.project(
+            input(
+                profile = profile,
+                assets = assets,
+                assumptions = EconomicAssumptions(
+                    inflationRate = 0.0,
+                    pensionIncomeTaxRate = 0.0,
+                    generalIncomeTaxRate = 0.0,
+                ),
+            ),
+        )
+        val at60 = result.yearlySnapshots.first { it.age == 60 }
+        val at61 = result.yearlySnapshots.first { it.age == 61 }
+
+        assertTrue(at60.netCashFlow > 0)
+        assertTrue(at61.totalAssets < at60.totalAssets)
+    }
+
+    @Test
+    fun `T19b - 퇴직연금 수령 중에도 운용 수익률이 잔액에 반영된다`() {
+        val profile = UserProfile(
+            currentAge = 65,
+            retirementAge = 60,
+            lifeExpectancy = 66,
+            monthlyLivingExpense = 0L,
+        )
+        val assets = listOf(
+            Asset.SeverancePension(
+                balance = 100_000_000L,
+                monthlyContribution = 0L,
+                contributionEndAge = 60,
+                payoutStartAge = 65,
+                annualReturnRate = 0.10,
+            ),
+        )
+
+        val result = engine.project(
+            input(
+                profile = profile,
+                assets = assets,
+                assumptions = EconomicAssumptions(inflationRate = 0.0),
+            ),
+        )
+        val at65 = result.yearlySnapshots.first { it.age == 65 }
+
+        // 1억 × 1.10 ÷ 1년 ≈ 1.1억 (물가연동 없음, 운용수익만)
+        assertEquals(110_000_000L, at65.annualIncome)
     }
 
     @Test
@@ -431,7 +663,9 @@ class CashFlowEngineTest {
             Asset.Investment(currentValue = 30_000_000L, annualReturnRate = 0.0),
         )
 
-        val result = engine.project(input(profile = profile, assumptions = assumptions, assets = assets))
+        val result = engine.project(
+            input(profile = profile, assumptions = assumptions.copy(healthInsuranceEnabled = false), assets = assets),
+        )
         val last = result.yearlySnapshots.last()
 
         assertNotNull(result.depletionYear)
@@ -448,7 +682,7 @@ class CashFlowEngineTest {
             monthlyLivingExpense = 0L,
         )
         val assets = listOf(
-            Asset.FixedIncome(monthlyAmount = 2_000_000L, startAge = 60, endAge = 62),
+            Asset.EmploymentIncome(monthlyAmount = 2_000_000L, startAge = 60, endAge = 62),
         )
 
         val result = engine.project(input(profile = profile, assets = assets))

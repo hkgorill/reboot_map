@@ -1,5 +1,7 @@
 package com.rebootmap.domain.model
 
+import com.rebootmap.domain.tax.AnnualHoldingCost
+import com.rebootmap.domain.tax.AnnualTaxBreakdown
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -72,10 +74,15 @@ class CashFlowProjectionTest {
     private fun snapshot(year: Int, age: Int, balance: Long) = YearSnapshot(
         year = year,
         age = age,
+        liquidAssets = balance,
+        illiquidAssets = 0L,
         totalAssets = balance,
         annualIncome = 0L,
         annualExpense = 0L,
+        annualLivingExpense = 0L,
+        annualHoldingCost = AnnualHoldingCost(),
         annualTax = 0L,
+        taxBreakdown = AnnualTaxBreakdown(),
         netCashFlow = 0L,
         endingBalance = balance,
     )

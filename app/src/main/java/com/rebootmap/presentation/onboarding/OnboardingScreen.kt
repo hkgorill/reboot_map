@@ -74,6 +74,7 @@ fun OnboardingScreen(
                             IntInputField(
                                 label = "현재 나이",
                                 value = currentAge,
+                                validRange = 18..100,
                                 onValueChange = { currentAge = it },
                             )
                         }
@@ -84,6 +85,7 @@ fun OnboardingScreen(
                             IntInputField(
                                 label = "목표 은퇴 연령",
                                 value = retirementAge,
+                                validRange = 18..100,
                                 onValueChange = { retirementAge = it },
                             )
                         }

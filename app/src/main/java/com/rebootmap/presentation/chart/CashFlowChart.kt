@@ -92,10 +92,17 @@ fun CashFlowChartCard(
             return@LaunchedEffect
         }
         chartEntriesReady = false
-        val entries = snapshots.mapIndexed { index, snapshot ->
-            entryOf(index.toFloat(), snapshot.endingBalance / 10_000f)
+        val totalEntries = snapshots.mapIndexed { index, snapshot ->
+            entryOf(index.toFloat(), snapshot.totalAssets / 10_000f)
         }
-        modelProducer.setEntriesSuspending(entries)
+        val illiquidEntries = snapshots.mapIndexed { index, snapshot ->
+            entryOf(index.toFloat(), snapshot.illiquidAssets / 10_000f)
+        }
+        val liquidEntries = snapshots.mapIndexed { index, snapshot ->
+            entryOf(index.toFloat(), snapshot.liquidAssets / 10_000f)
+        }
+        // 총자산 → 비유동 → 유동 순으로 그려 유동선이 겹칠 때 위에 보이게 한다.
+        modelProducer.setEntriesSuspending(listOf(totalEntries, illiquidEntries, liquidEntries))
         chartEntriesReady = true
     }
 
@@ -117,11 +124,15 @@ fun CashFlowChartCard(
                 text = if (showComparison) {
                     "주황(●) = A 현재 유지 · 파란 실선 = B 거주지 이동"
                 } else {
-                    "가로축 = 나이(세) · 세로축 = 총자산(만원)"
+                    "총자산 = 현금+투자+연금 적립 잔액+부동산 · 연금 인출 시 잔액 감소 반영"
                 },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+
+            if (!showComparison) {
+                AssetBreakdownLegend()
+            }
 
             if (showComparison) {
                 ComparisonLegend()
@@ -149,7 +160,15 @@ fun CashFlowChartCard(
                             lines = listOf(
                                 LineChart.LineSpec(
                                     lineColor = PrimaryBlue.toArgb(),
-                                    pointSizeDp = 6f,
+                                    pointSizeDp = 4f,
+                                ),
+                                LineChart.LineSpec(
+                                    lineColor = AccentCoral.toArgb(),
+                                    pointSizeDp = 4f,
+                                ),
+                                LineChart.LineSpec(
+                                    lineColor = SuccessGreen.toArgb(),
+                                    pointSizeDp = 5f,
                                 ),
                             ),
                             spacing = 4.dp,
@@ -354,7 +373,7 @@ private fun DeficitAgeTimeline(
         )
         Text(
             text = "은퇴(${retirementAge}세) 이후, 총자산이 전년보다 줄어든 해를 빨간색으로 표시합니다. " +
-                "투자 수익률 변경에 따라 함께 갱신됩니다.",
+                "월 순현금이 흑자여도 연금 적립 잔액이 소진되면 빨간색이 될 수 있습니다.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -420,6 +439,19 @@ private fun DeficitAgeTimeline(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+    }
+}
+
+@Composable
+private fun AssetBreakdownLegend() {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        TimelineLegendItem(color = SuccessGreen, label = "유동자산")
+        TimelineLegendItem(color = AccentCoral, label = "비유동(부동산)")
+        TimelineLegendItem(color = PrimaryBlue, label = "총자산")
     }
 }
 

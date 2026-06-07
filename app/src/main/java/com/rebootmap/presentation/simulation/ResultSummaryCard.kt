@@ -84,9 +84,12 @@ fun ResultSummaryCard(
                 hint = "연금·기타수입 < 생활비+세금",
             )
 
-            if (incomeShortfallYears.isNotEmpty() && assetDeclineYears.size != incomeShortfallYears.size) {
+            if (assetDeclineYears.isNotEmpty()) {
                 Text(
                     text = when {
+                        incomeShortfallYears.isEmpty() ->
+                            "월 순현금이 흑자인 해에도 연금·퇴직금 적립 잔액이 줄면 총자산은 감소합니다. " +
+                                "아래 차트의 빨간 구간이 이 구간입니다."
                         assetDeclineYears.size > incomeShortfallYears.size ->
                             "연금·퇴직금 인출은 수입으로 잡히지만 적립 잔액이 줄면 자산 감소 연수가 더 길 수 있습니다."
                         else ->

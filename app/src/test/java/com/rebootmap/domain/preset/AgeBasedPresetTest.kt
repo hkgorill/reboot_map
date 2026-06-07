@@ -50,7 +50,7 @@ class AgeBasedPresetTest {
         assertEquals(1, preset.assets.filterIsInstance<Asset.SeverancePension>().size)
         assertEquals(1, preset.assets.filterIsInstance<Asset.PersonalPension>().size)
         assertEquals(1, preset.assets.filterIsInstance<Asset.YellowUmbrella>().size)
-        assertEquals(1, preset.assets.filterIsInstance<Asset.FixedIncome>().size)
+        assertEquals(1, preset.assets.filterIsInstance<Asset.EmploymentIncome>().size)
     }
 
     @Test

@@ -138,6 +138,7 @@ fun RelocationScenarioCard(
                 IntInputField(
                     label = if (timing is PurchaseTiming.BeforeSale) "매각 N년 전 구입" else "매각 N년 후 구입",
                     value = years,
+                    validRange = 1..5,
                     onValueChange = { count ->
                         val safe = count.coerceIn(1, 5)
                         val updated = when (timing) {

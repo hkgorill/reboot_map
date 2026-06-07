@@ -17,9 +17,33 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.text.input.KeyboardType
+import kotlin.math.abs
 import kotlinx.coroutines.launch
 
 private const val MAN_WON = 10_000L
+
+/** 미입력(0)은 유지하고, 그 외 값만 구간으로 보정 */
+fun coerceIntPreservingZero(value: Int, range: IntRange): Int =
+    if (value == 0) 0 else value.coerceIn(range)
+
+/** 미입력(0.0)은 유지하고, 그 외 값만 구간으로 보정 */
+fun coercePercentPreservingZero(value: Double, range: ClosedFloatingPointRange<Double>): Double =
+    if (value == 0.0) 0.0 else value.coerceIn(range)
+
+/** IntInputField와 동일 — 타이핑 중 모델 반영 여부 */
+fun isIntInputAllowed(parsed: Int, validRange: IntRange?): Boolean =
+    validRange == null || parsed == 0 || parsed in validRange
+
+/** PercentInputField와 동일 — 타이핑 중 모델 반영 여부 */
+fun isPercentInputAllowed(parsed: Double, validRange: ClosedFloatingPointRange<Double>?): Boolean =
+    validRange == null || parsed == 0.0 || parsed in validRange
+
+/** 슬라이더 등 외부에서 value가 바뀌었을 때 입력 텍스트를 동기화할지 판단 */
+fun shouldSyncPercentTextFromValue(text: String, value: Double, isFocused: Boolean): Boolean {
+    if (!isFocused) return true
+    val parsedFromText = text.replace(",", ".").toDoubleOrNull()?.div(100) ?: 0.0
+    return abs(parsedFromText - value) > 1e-9
+}
 
 private fun parseManWonInput(text: String): Long =
     text.filter { it.isDigit() }.toLongOrNull() ?: 0L
@@ -49,9 +73,10 @@ fun ManWonInputField(
     supportingText: String? = null,
     placeholder: String? = null,
 ) {
-    val manValue = valueInWon / MAN_WON
-    var text by remember(valueInWon) {
-        mutableStateOf(if (manValue == 0L) "" else formatNumberWithComma(manValue))
+    var text by remember {
+        mutableStateOf(
+            if (valueInWon == 0L) "" else formatNumberWithComma(valueInWon / MAN_WON),
+        )
     }
     var isFocused by remember { mutableStateOf(false) }
 
@@ -99,9 +124,13 @@ fun IntInputField(
     supportingText: String? = null,
     placeholder: String? = null,
     onCommit: ((Int) -> Unit)? = null,
+    /** 설정 시 0(미입력) 또는 구간 내 값만 모델에 반영 — 타이핑 중간값(예: 6→65) 크래시 방지 */
+    validRange: IntRange? = null,
 ) {
     var text by remember { mutableStateOf(formatIntForDisplay(value)) }
     var isFocused by remember { mutableStateOf(false) }
+
+    fun isAllowed(parsed: Int): Boolean = isIntInputAllowed(parsed, validRange)
 
     LaunchedEffect(value) {
         if (!isFocused) {
@@ -114,7 +143,10 @@ fun IntInputField(
         onValueChange = { raw ->
             val digits = raw.filter { it.isDigit() }
             text = digits
-            onValueChange(digits.toIntOrNull() ?: 0)
+            val parsed = digits.toIntOrNull() ?: 0
+            if (isAllowed(parsed)) {
+                onValueChange(parsed)
+            }
         },
         label = { Text(label) },
         placeholder = placeholder?.let { { Text(it) } },
@@ -125,7 +157,11 @@ fun IntInputField(
             .bringIntoViewWhenFocused()
             .onFocusChanged { focus ->
                 if (isFocused && !focus.isFocused) {
-                    onCommit?.invoke(text.toIntOrNull() ?: 0)
+                    val parsed = text.toIntOrNull() ?: 0
+                    when {
+                        onCommit != null -> onCommit(parsed)
+                        validRange != null && parsed != 0 -> onValueChange(parsed.coerceIn(validRange))
+                    }
                 }
                 isFocused = focus.isFocused
                 if (!focus.isFocused) {
@@ -145,7 +181,11 @@ fun PercentInputField(
     supportingText: String? = null,
     placeholder: String? = null,
     onCommit: ((Double) -> Unit)? = null,
+    /** 소수 비율 기준 (예: 0.0..0.2 = 0~20%) */
+    validRange: ClosedFloatingPointRange<Double>? = null,
 ) {
+    fun isAllowed(parsed: Double): Boolean = isPercentInputAllowed(parsed, validRange)
+
     fun formatPercent(percent: Double): String =
         if (percent == 0.0) "" else {
             if (percent % 1.0 == 0.0) percent.toInt().toString() else "%.1f".format(percent)
@@ -156,7 +196,7 @@ fun PercentInputField(
     var isFocused by remember { mutableStateOf(false) }
 
     LaunchedEffect(value) {
-        if (!isFocused) {
+        if (shouldSyncPercentTextFromValue(text, value, isFocused)) {
             text = formatPercent(value * 100)
         }
     }
@@ -164,9 +204,11 @@ fun PercentInputField(
     OutlinedTextField(
         value = text,
         onValueChange = { raw ->
-            text = raw.filter { it.isDigit() || it == '.' }
+            text = raw.filter { it.isDigit() || it == '.' || it == '-' }
             val parsed = text.replace(",", ".").toDoubleOrNull()?.div(100) ?: 0.0
-            onValueChange(parsed)
+            if (isAllowed(parsed)) {
+                onValueChange(parsed)
+            }
         },
         label = { Text(label) },
         placeholder = placeholder?.let { { Text(it) } },
@@ -178,7 +220,10 @@ fun PercentInputField(
             .onFocusChanged { focus ->
                 if (isFocused && !focus.isFocused) {
                     val parsed = text.replace(",", ".").toDoubleOrNull()?.div(100) ?: 0.0
-                    onCommit?.invoke(parsed)
+                    when {
+                        onCommit != null -> onCommit(parsed)
+                        validRange != null && parsed != 0.0 -> onValueChange(parsed.coerceIn(validRange))
+                    }
                 }
                 isFocused = focus.isFocused
                 if (!focus.isFocused) {

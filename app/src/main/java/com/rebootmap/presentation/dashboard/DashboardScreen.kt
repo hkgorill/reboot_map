@@ -3,6 +3,7 @@ package com.rebootmap.presentation.dashboard
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
@@ -20,11 +21,12 @@ import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.TrendingUp
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Work
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material.icons.outlined.Store
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -38,25 +40,27 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.rebootmap.domain.model.Asset
+import com.rebootmap.domain.model.LivingExpenseInflationBase
 import com.rebootmap.presentation.chart.CashFlowChartCard
 import com.rebootmap.presentation.components.ExitConfirmBackHandler
 import com.rebootmap.presentation.components.ExpandableCard
 import com.rebootmap.presentation.components.ResetInputsConfirmDialog
-import com.rebootmap.presentation.components.InvestmentReturnRate
-import com.rebootmap.presentation.components.InvestmentReturnSlider
 import com.rebootmap.presentation.components.IntInputField
+import com.rebootmap.presentation.components.coercePercentPreservingZero
 import com.rebootmap.presentation.components.ManWonInputField
 import com.rebootmap.presentation.components.PercentInputField
 import com.rebootmap.presentation.simulation.AssetCardFields
 import com.rebootmap.presentation.simulation.MilestoneTimelineCard
 import com.rebootmap.presentation.simulation.PresetHints
 import com.rebootmap.presentation.simulation.RelocationScenarioCard
+import com.rebootmap.presentation.simulation.MonthlyCashFlowSummaryCard
 import com.rebootmap.presentation.simulation.ResultSummaryCard
 import com.rebootmap.presentation.report.SimulationPdfExporter
 import com.rebootmap.presentation.simulation.SimulationViewModel
@@ -141,6 +145,13 @@ fun DashboardScreen(viewModel: SimulationViewModel) {
                 }
 
                 item {
+                    MonthlyCashFlowSummaryCard(
+                        projection = projection,
+                        retirementAge = state.profile.retirementAge,
+                    )
+                }
+
+                item {
                     CashFlowChartCard(
                         projection = projection,
                         retirementAge = state.profile.retirementAge,
@@ -176,15 +187,6 @@ fun DashboardScreen(viewModel: SimulationViewModel) {
                 )
             }
 
-            state.investmentAsset?.takeIf { it.currentValue > 0 }?.let { investment ->
-                item {
-                    InvestmentSliderCard(
-                        returnRate = investment.annualReturnRate,
-                        onReturnRateChange = viewModel::updateInvestmentReturnRate,
-                    )
-                }
-            }
-
             item {
                 ExpandableCard(
                     title = "기본 정보",
@@ -196,6 +198,7 @@ fun DashboardScreen(viewModel: SimulationViewModel) {
                     IntInputField(
                         label = "현재 나이",
                         value = state.profile.currentAge,
+                        validRange = 18..100,
                         onValueChange = { viewModel.updateCurrentAge(it) },
                         onCommit = { viewModel.commitCurrentAge(it) },
                         supportingText = "입력 완료 시 연령대별 참고값이 갱신됩니다 (18~100세)",
@@ -210,6 +213,7 @@ fun DashboardScreen(viewModel: SimulationViewModel) {
                     IntInputField(
                         label = "목표 은퇴 연령",
                         value = state.profile.retirementAge,
+                        validRange = 18..100,
                         onValueChange = { age ->
                             viewModel.updateProfile(
                                 state.profile.copy(retirementAge = age),
@@ -219,6 +223,7 @@ fun DashboardScreen(viewModel: SimulationViewModel) {
                     IntInputField(
                         label = "기대 수명",
                         value = state.profile.lifeExpectancy,
+                        validRange = 18..100,
                         onValueChange = { age ->
                             viewModel.updateProfile(
                                 state.profile.copy(lifeExpectancy = age),
@@ -238,6 +243,7 @@ fun DashboardScreen(viewModel: SimulationViewModel) {
                     PercentInputField(
                         label = "물가상승률 (%)",
                         value = state.assumptions.inflationRate,
+                        validRange = 0.0..0.2,
                         onValueChange = { rate ->
                             viewModel.updateAssumptions(
                                 state.assumptions.copy(inflationRate = rate),
@@ -245,17 +251,34 @@ fun DashboardScreen(viewModel: SimulationViewModel) {
                         },
                         onCommit = { rate ->
                             viewModel.updateAssumptions(
-                                state.assumptions.copy(inflationRate = rate.coerceIn(0.0, 0.2)),
+                                state.assumptions.copy(
+                                    inflationRate = coercePercentPreservingZero(rate, 0.0..0.2),
+                                ),
                             )
                         },
                         supportingText = state.referencePreset?.assumptions?.inflationRate?.let {
                             PresetHints.percent(it)
                         },
                     )
+                    LivingExpenseInflationBaseSelector(
+                        selected = state.assumptions.livingExpenseInflationBase,
+                        onSelect = { base ->
+                            viewModel.updateAssumptions(
+                                state.assumptions.copy(livingExpenseInflationBase = base),
+                            )
+                        },
+                    )
+                    TaxAssumptionSection(
+                        assumptions = state.assumptions,
+                        onUpdate = viewModel::updateAssumptions,
+                    )
                 }
             }
 
-            itemsIndexed(state.assets) { index, asset ->
+            itemsIndexed(
+                items = state.assets,
+                key = { _, asset -> asset.id },
+            ) { index, asset ->
                 val referenceAsset = state.referencePreset?.assets?.getOrNull(index)
                 ExpandableCard(
                     title = asset.displayTitle(),
@@ -276,41 +299,94 @@ fun DashboardScreen(viewModel: SimulationViewModel) {
 }
 
 @Composable
-private fun InvestmentSliderCard(
-    returnRate: Double,
-    onReturnRateChange: (Double) -> Unit,
+private fun LivingExpenseInflationBaseSelector(
+    selected: LivingExpenseInflationBase,
+    onSelect: (LivingExpenseInflationBase) -> Unit,
 ) {
-    Card(
+    Column(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-        ),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+        Text(
+            text = "생활비 물가 기준",
+            style = MaterialTheme.typography.labelLarge,
+        )
+        Text(
+            text = "목표 월 생활비를 언제 기준 금액으로 볼지 선택합니다.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text(
-                text = "투자 수익률 시뮬레이션",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
+            FilterChip(
+                selected = selected == LivingExpenseInflationBase.RETIREMENT_AGE,
+                onClick = { onSelect(LivingExpenseInflationBase.RETIREMENT_AGE) },
+                label = { Text("은퇴 시점") },
             )
-            Text(
-                text = InvestmentReturnRate.formatPercent(returnRate),
-                style = MaterialTheme.typography.headlineSmall,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.Bold,
-            )
-            InvestmentReturnSlider(
-                returnRate = returnRate,
-                onReturnRateChange = onReturnRateChange,
-            )
-            Text(
-                text = "− / + 버튼(0.5%p) 또는 슬라이더로 조절 · 차트 즉시 갱신",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f),
+            FilterChip(
+                selected = selected == LivingExpenseInflationBase.SIMULATION_START,
+                onClick = { onSelect(LivingExpenseInflationBase.SIMULATION_START) },
+                label = { Text("현재부터") },
             )
         }
+    }
+}
+
+@Composable
+private fun TaxAssumptionSection(
+    assumptions: com.rebootmap.domain.model.EconomicAssumptions,
+    onUpdate: (com.rebootmap.domain.model.EconomicAssumptions) -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(
+            text = "세금·보험 (간이 추정)",
+            style = MaterialTheme.typography.labelLarge,
+        )
+        Text(
+            text = "재산세·종부세·지역가입자 건강보험료 반영 여부",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        TaxToggleRow(
+            label = "재산세·종부세",
+            checked = assumptions.propertyTaxEnabled && assumptions.comprehensiveRealEstateTaxEnabled,
+            onCheckedChange = { enabled ->
+                onUpdate(
+                    assumptions.copy(
+                        propertyTaxEnabled = enabled,
+                        comprehensiveRealEstateTaxEnabled = enabled,
+                    ),
+                )
+            },
+        )
+        TaxToggleRow(
+            label = "건강보험·장기요양",
+            checked = assumptions.healthInsuranceEnabled,
+            onCheckedChange = { enabled ->
+                onUpdate(assumptions.copy(healthInsuranceEnabled = enabled))
+            },
+        )
+    }
+}
+
+@Composable
+private fun TaxToggleRow(
+    label: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(text = label, style = MaterialTheme.typography.bodyMedium)
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
 
@@ -322,6 +398,8 @@ private fun Asset.icon(): ImageVector = when (this) {
     is Asset.YellowUmbrella -> Icons.Outlined.Shield
     is Asset.Investment -> Icons.Outlined.TrendingUp
     is Asset.CashSavings -> Icons.Outlined.Savings
-    is Asset.FixedIncome -> Icons.Outlined.Paid
+    is Asset.EmploymentIncome -> Icons.Outlined.Work
+    is Asset.BusinessIncome -> Icons.Outlined.Store
+    is Asset.OtherFixedIncome -> Icons.Outlined.Paid
     is Asset.HousingPension -> Icons.Outlined.RealEstateAgent
 }

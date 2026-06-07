@@ -259,7 +259,9 @@ class SimulationViewModel(
         is Asset.YellowUmbrella -> balance > 0 || monthlyContribution > 0
         is Asset.Investment -> currentValue > 0
         is Asset.CashSavings -> maturityAmount > 0 && maturityYear > 0
-        is Asset.FixedIncome -> monthlyAmount > 0 && startAge > 0 && endAge > 0
+        is Asset.EmploymentIncome -> monthlyAmount > 0 && startAge > 0 && endAge > 0
+        is Asset.BusinessIncome -> monthlyAmount > 0 && startAge > 0 && endAge > 0
+        is Asset.OtherFixedIncome -> monthlyAmount > 0 && startAge > 0 && endAge > 0
         is Asset.HousingPension -> enabled && startAge > 0
     }
 }

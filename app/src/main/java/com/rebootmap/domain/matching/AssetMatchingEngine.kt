@@ -2,6 +2,7 @@ package com.rebootmap.domain.matching
 
 import com.rebootmap.domain.milestone.LumpSumExpense
 import com.rebootmap.domain.model.Asset
+import com.rebootmap.domain.model.RealEstateProjection
 import kotlin.math.abs
 
 data class AssetSuggestion(
@@ -42,8 +43,9 @@ object AssetMatchingEngine {
                     )
                 }
                 is Asset.RealEstate -> {
-                    if (asset.netEquity <= 0) return@forEach
                     val saleYear = asset.saleYear ?: return@forEach
+                    val projectedNet = RealEstateProjection.projectedNetEquity(asset, saleYear, startYear)
+                    if (projectedNet <= 0) return@forEach
                     val yearDiff = abs(saleYear - expense.year)
                     val score = when {
                         saleYear == expense.year -> 95
@@ -54,7 +56,7 @@ object AssetMatchingEngine {
                     suggestions += AssetSuggestion(
                         assetId = asset.id,
                         assetLabel = "부동산 매각",
-                        availableAmount = asset.netEquity,
+                        availableAmount = projectedNet,
                         timingNote = "${saleYear}년 매각 예정",
                         matchScore = score,
                     )
@@ -73,6 +75,7 @@ object AssetMatchingEngine {
                     if (asset.balance <= 0) return@forEach
                     val expenseAge = currentAge + (expense.year - startYear)
                     if (asset.contributionEndAge > 0 && expenseAge < asset.contributionEndAge) return@forEach
+                    if (asset.payoutStartAge > 0 && expenseAge < asset.payoutStartAge) return@forEach
                     suggestions += AssetSuggestion(
                         assetId = asset.id,
                         assetLabel = "퇴직연금",

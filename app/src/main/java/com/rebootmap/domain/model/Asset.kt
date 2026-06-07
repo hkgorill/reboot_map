@@ -26,12 +26,15 @@ sealed class Asset {
         val holdingYears: Int = 10,
         val isPrimaryResidence: Boolean = true,
         val saleYear: Int?,
+        /** 매각 예정 연도 시세(총 자산가치). 0이면 현재 시세 유지 */
+        val expectedSalePrice: Long = 0L,
     ) : Asset() {
         init {
             require(currentValue >= 0) { "부동산 시세는 0 이상이어야 합니다." }
             require(debtAmount >= 0) { "부채 금액은 0 이상이어야 합니다." }
             require(acquisitionCost >= 0) { "취득가액은 0 이상이어야 합니다." }
             require(holdingYears in 0..50) { "보유 연수가 유효하지 않습니다." }
+            require(expectedSalePrice >= 0) { "예상 매각 가격은 0 이상이어야 합니다." }
         }
 
         val netEquity: Long get() = (currentValue - debtAmount).coerceAtLeast(0L)
@@ -62,6 +65,7 @@ sealed class Asset {
         val balance: Long,
         val monthlyContribution: Long,
         val contributionEndAge: Int,
+        val payoutStartAge: Int = 0,
         val annualReturnRate: Double = PensionDefaults.SEVERANCE_RETURN_RATE,
     ) : Asset() {
         init {
@@ -69,6 +73,9 @@ sealed class Asset {
             require(monthlyContribution >= 0) { "월 납입액은 0 이상이어야 합니다." }
             require(contributionEndAge == 0 || contributionEndAge in 18..100) {
                 "납입 종료 연령이 유효하지 않습니다."
+            }
+            require(payoutStartAge == 0 || payoutStartAge in 55..70) {
+                "연금 수령 개시 연령은 55~70세 사이여야 합니다."
             }
             require(annualReturnRate in -0.2..0.2) { "운용 수익률이 유효하지 않습니다." }
         }
@@ -145,24 +152,39 @@ sealed class Asset {
         }
     }
 
-    /**
-     * 고정수입 (임대료·근로소득·퇴직 후 아르바이트 등)
-     * - 지정 연령 구간 동안 매년 월 수입 × 12 반영
-     * - 근로소득은 종료 연령을 은퇴 연령으로, 임대료는 기대 수명까지 설정
-     */
-    data class FixedIncome(
-        override val id: String = "fixed_income",
+    /** 직장 소득 (급여·근로) — [employmentIncomeTaxRate] 적용 */
+    data class EmploymentIncome(
+        override val id: String = "employment_income",
         val monthlyAmount: Long,
         val startAge: Int,
         val endAge: Int,
     ) : Asset() {
         init {
-            require(monthlyAmount >= 0) { "월 고정수입은 0 이상이어야 합니다." }
-            require(startAge == 0 || startAge in 18..100) { "수입 시작 연령이 유효하지 않습니다." }
-            require(endAge == 0 || endAge in 18..100) { "수입 종료 연령이 유효하지 않습니다." }
-            require(startAge == 0 && endAge == 0 || startAge in 18..100 && endAge in 18..100 && startAge <= endAge) {
-                "수입 시작 연령은 종료 연령 이하여야 합니다."
-            }
+            require(monthlyAmount >= 0) { "월 직장 소득은 0 이상이어야 합니다." }
+        }
+    }
+
+    /** 사업 소득 (프리랜서·자영업 순수익 근사) — [businessIncomeTaxRate] 적용 */
+    data class BusinessIncome(
+        override val id: String = "business_income",
+        val monthlyAmount: Long,
+        val startAge: Int,
+        val endAge: Int,
+    ) : Asset() {
+        init {
+            require(monthlyAmount >= 0) { "월 사업 소득은 0 이상이어야 합니다." }
+        }
+    }
+
+    /** 기타 고정수입 (임대료·퇴직 후 아르바이트 등) — [generalIncomeTaxRate] 적용 */
+    data class OtherFixedIncome(
+        override val id: String = "other_fixed_income",
+        val monthlyAmount: Long,
+        val startAge: Int,
+        val endAge: Int,
+    ) : Asset() {
+        init {
+            require(monthlyAmount >= 0) { "월 기타 수입은 0 이상이어야 합니다." }
         }
     }
 

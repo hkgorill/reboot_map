@@ -6,7 +6,7 @@
 
 
 
-**현재 버전:** `1.3.0-phase4`  
+**현재 버전:** `1.4.0-phase5`  
 
 **마스터 요건:** [`docs/PRD.md`](docs/PRD.md)
 
@@ -61,9 +61,11 @@
 
 | 4 | ✅ 코드 완료 | `1.3.0` | [PHASE-04](docs/phases/PHASE-04.md) | [리포트](docs/reports/phase-04-test-report.md) |
 
+| 5 | ✅ 완료 | `1.4.0` | [PHASE-05](docs/phases/PHASE-05.md) | [리포트](docs/reports/phase-05-test-report.md) |
 
 
-> **실기기 테스트:** 2026-06-06 1차 탐색·버그 보완 완료 → **2026-06-07 정식 일괄 검증 예정** (Phase 3·4)
+
+> **최근 실기기 검증:** Phase 5 (2026-06-07) — 세금·소득 분리·부동산 시세 추정
 
 
 
@@ -109,6 +111,22 @@
 
 
 
+### Phase 5 (완료)
+
+
+
+- **소득 3종** — 직장·사업·기타 고정수입 (기존 고정수입 마이그레이션)
+
+- **세금·보험 간이** — 재산세·종부세·건보·장기요양 (ON/OFF)
+
+- **월 순수입 카드** — 생활비·부과·세금(세목별)·순현금·총자산 전년 대비
+
+- **PDF** — 연령별 현금흐름·세목 breakdown
+
+- **부동산 시세 추정** — 예상 매각가 → 연평균 상승·하락률, 차트·매각 수입 반영
+
+
+
 ---
 
 
@@ -123,7 +141,7 @@
 
 - Vico 차트 · kotlinx-serialization
 
-- JUnit 단위 테스트 (**52건**) · Compose UI 테스트
+- JUnit 단위 테스트 (**96건**) · Compose UI 테스트
 
 
 
@@ -145,7 +163,110 @@
 
 
 
-실기기 설치: Android Studio에서 `app` Run 또는 `.\gradlew.bat installDebug`
+### 실기기 — 터미널로 앱 설치
+
+
+
+USB 디버깅을 켠 뒤, 프로젝트 루트에서 실행합니다.
+
+
+
+```powershell
+
+# 기기 연결 확인 (목록에 device 상태여야 함)
+
+adb devices
+
+
+
+# 디버그 APK 빌드 + 연결된 실기기에 설치 (권장)
+
+.\gradlew.bat installDebug
+
+```
+
+
+
+APK만 직접 설치할 때:
+
+
+
+```powershell
+
+.\gradlew.bat assembleDebug
+
+adb install -r app\build\outputs\apk\debug\app-debug.apk
+
+```
+
+
+
+설치 후 앱 실행 (패키지: `com.rebootmap`):
+
+
+
+```powershell
+
+adb shell am start -n com.rebootmap/.MainActivity
+
+```
+
+
+
+> Android Studio 없이도 `adb`(Platform Tools)만 PATH에 있으면 됩니다.  
+> `unauthorized`가 보이면 기기에서 USB 디버깅 허용을 눌러 주세요.
+
+
+
+### 실기기 — 터미널로 화면 캡처
+
+
+
+캡처 파일은 **다운로드 폴더**에 저장하는 예시입니다.
+
+
+
+```powershell
+
+# 방법 1: 한 줄 (PC로 바로 저장)
+
+adb exec-out screencap -p > "$env:USERPROFILE\Downloads\screen.png"
+
+```
+
+
+
+```powershell
+
+# 방법 2: 기기 저장 후 pull
+
+adb shell screencap -p /sdcard/screen.png
+
+adb pull /sdcard/screen.png "$env:USERPROFILE\Downloads\screen.png"
+
+adb shell rm /sdcard/screen.png
+
+```
+
+
+
+파일명에 날짜·시간을 넣을 때:
+
+
+
+```powershell
+
+$path = "$env:USERPROFILE\Downloads\screen_$(Get-Date -Format 'yyyyMMdd_HHmmss').png"
+
+adb exec-out screencap -p > $path
+
+Write-Host "저장됨: $path"
+
+```
+
+
+
+여러 대 연결 시 `-s <device_serial>` 옵션으로 기기를 지정할 수 있습니다.
 
 
 

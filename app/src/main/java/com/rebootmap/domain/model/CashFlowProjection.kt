@@ -2,14 +2,24 @@ package com.rebootmap.domain.model
 
 import com.rebootmap.domain.milestone.LumpSumExpense
 import com.rebootmap.domain.scenario.RelocationPlan
+import com.rebootmap.domain.tax.AnnualHoldingCost
+import com.rebootmap.domain.tax.AnnualTaxBreakdown
 
 data class YearSnapshot(
     val year: Int,
     val age: Int,
+    /** 현금·투자·연금 적립 잔액 등 유동 합계 */
+    val liquidAssets: Long,
+    /** 미매각 부동산·이주 신규주택 순자산 등 비유동 합계 */
+    val illiquidAssets: Long,
     val totalAssets: Long,
     val annualIncome: Long,
+    /** 생활비 + 보유세·종부세 */
     val annualExpense: Long,
+    val annualLivingExpense: Long,
+    val annualHoldingCost: AnnualHoldingCost,
     val annualTax: Long,
+    val taxBreakdown: AnnualTaxBreakdown,
     val netCashFlow: Long,
     val endingBalance: Long,
 )

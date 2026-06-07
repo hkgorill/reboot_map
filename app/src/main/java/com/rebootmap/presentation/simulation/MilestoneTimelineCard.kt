@@ -40,6 +40,7 @@ import com.rebootmap.domain.milestone.ExpenseCategory
 import com.rebootmap.domain.milestone.LumpSumExpense
 import com.rebootmap.presentation.components.ExpandableCard
 import com.rebootmap.presentation.components.IntInputField
+import com.rebootmap.presentation.components.coerceIntPreservingZero
 import com.rebootmap.presentation.components.ManWonInputField
 import com.rebootmap.presentation.components.formatKoreanMan
 import java.time.Year
@@ -299,11 +300,13 @@ private fun AddMilestoneForm(
         onValueChange = { amount = it },
     )
 
+    val maxYear = currentYear + (100 - currentAge)
     IntInputField(
         label = "지출 연도",
         value = year,
+        validRange = currentYear..maxYear,
         onValueChange = { year = it },
-        onCommit = { year = it.coerceIn(currentYear, currentYear + (100 - currentAge)) },
+        onCommit = { year = coerceIntPreservingZero(it, currentYear..maxYear) },
         supportingText = "현재 ${currentYear}년 · ± 버튼으로 기존 항목 연도 조정",
     )
 
