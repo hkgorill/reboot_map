@@ -62,6 +62,7 @@ import com.rebootmap.presentation.simulation.PresetHints
 import com.rebootmap.presentation.simulation.RelocationScenarioCard
 import com.rebootmap.presentation.simulation.MonthlyCashFlowSummaryCard
 import com.rebootmap.presentation.simulation.ResultSummaryCard
+import com.rebootmap.presentation.guide.UserGuideDialog
 import com.rebootmap.presentation.report.SimulationPdfExporter
 import com.rebootmap.presentation.simulation.SimulationViewModel
 import com.rebootmap.presentation.simulation.displayTitle
@@ -74,6 +75,7 @@ fun DashboardScreen(viewModel: SimulationViewModel) {
     val context = LocalContext.current
     var showMenu by remember { mutableStateOf(false) }
     var showResetDialog by remember { mutableStateOf(false) }
+    var showUserGuide by remember { mutableStateOf(false) }
 
     ExitConfirmBackHandler()
 
@@ -85,6 +87,10 @@ fun DashboardScreen(viewModel: SimulationViewModel) {
             },
             onDismiss = { showResetDialog = false },
         )
+    }
+
+    if (showUserGuide) {
+        UserGuideDialog(onDismiss = { showUserGuide = false })
     }
 
     Scaffold(
@@ -109,6 +115,13 @@ fun DashboardScreen(viewModel: SimulationViewModel) {
                         expanded = showMenu,
                         onDismissRequest = { showMenu = false },
                     ) {
+                        DropdownMenuItem(
+                            text = { Text("이용 가이드") },
+                            onClick = {
+                                showMenu = false
+                                showUserGuide = true
+                            },
+                        )
                         DropdownMenuItem(
                             text = { Text("PDF 리포트 공유") },
                             onClick = {

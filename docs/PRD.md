@@ -298,6 +298,25 @@ netCashFlow = annualIncome - annualExpense - annualTax
 
 ---
 
+### Phase 5.1 — 이용 가이드 + UX 보완 ✅ (완료)
+
+> 상세: [`phases/PHASE-05.1.md`](phases/PHASE-05.1.md)
+
+- [x] ⋮ 메뉴 「이용 가이드」 팝업 (사용법·계산식·예시)
+- [x] 월 순수입 카드 보조 설명 (월 부과, 총자산 증감)
+
+---
+
+### Phase 6 — 복수 부동산 + 주택/비주택 보유세 📋 (설계 초안)
+
+> 상세: [`phases/PHASE-06.md`](phases/PHASE-06.md)
+
+- [ ] 부동산 2건 이상 추가·삭제
+- [ ] 주택/비주택 유형별 재산세
+- [ ] DataStore v3 마이그레이션
+
+---
+
 ## 7. 테스트 전략
 
 ### 7.1 단위 테스트 (매 Phase)

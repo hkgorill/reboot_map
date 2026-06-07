@@ -26,7 +26,11 @@
 
 | 4 | [PHASE-04](phases/PHASE-04.md) | [리포트](reports/phase-04-test-report.md) (52건) | 1차 탐색·보완 | `af6dc05` |
 
-| 5 | [PHASE-05](phases/PHASE-05.md) | [리포트](reports/phase-05-test-report.md) (96건) | ✅ 완료 (2026-06-07) | (본 커밋) |
+| 5 | [PHASE-05](phases/PHASE-05.md) | [리포트](reports/phase-05-test-report.md) (96건) | ✅ 완료 | `fab6c8d` |
+
+| 5.1 | [PHASE-05.1](phases/PHASE-05.1.md) | — | 확인 권장 | (본 작업) |
+
+| 6 | [PHASE-06](phases/PHASE-06.md) | — | 설계 초안 | — |
 
 
 
@@ -34,7 +38,7 @@
 
 
 
-## MVP 기능 요약 (Phase 1~5)
+## MVP 기능 요약 (Phase 1~5.1)
 
 
 
@@ -44,9 +48,9 @@
 
 - 목돈 지출 타임라인 · 자산 매칭 · PDF 리포트 공유
 
-- **세금·소득 분리** — 직장/사업/기타, 재산세·종부세·건보, 월표·PDF breakdown
+- 세금·소득 분리 · 부동산 시세 추정(CAGR)
 
-- **부동산 시세 추정** — 예상 매각가 기반 연평균 상승·하락률
+- **이용 가이드 팝업** · 월표 보조 설명
 
 
 
@@ -58,9 +62,9 @@
 
 
 
-1. Phase 3·4 정식 실기기 일괄 검증 (미완 시)
+1. **Phase 6** — 복수 부동산·주택/비주택 보유세 ([`PHASE-06.md`](phases/PHASE-06.md))
 
-2. 후속 Phase 검토 — 대출 상환·지역별 세율 등
+2. Phase 3·4 정식 실기기 일괄 검증 (미완 시)
 
 
 
