@@ -1,16 +1,21 @@
 package com.rebootmap.presentation.simulation
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.ui.unit.dp
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import com.rebootmap.domain.model.Asset
+import com.rebootmap.domain.model.RealEstateCategory
 import com.rebootmap.domain.model.RealEstateProjection
 import com.rebootmap.domain.model.PensionDefaults
 import com.rebootmap.presentation.components.IntInputField
@@ -81,10 +86,51 @@ fun AssetCardFields(
     asset: Asset,
     referenceAsset: Asset?,
     onAssetChange: (Asset) -> Unit,
+    onRemove: (() -> Unit)? = null,
 ) {
     when (asset) {
         is Asset.RealEstate -> {
             val ref = referenceAsset as? Asset.RealEstate
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Text(text = "유형", style = MaterialTheme.typography.labelLarge)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    FilterChip(
+                        selected = asset.category == RealEstateCategory.PRIMARY_RESIDENCE,
+                        onClick = {
+                            onAssetChange(
+                                asset.copy(
+                                    category = RealEstateCategory.PRIMARY_RESIDENCE,
+                                    isPrimaryResidence = true,
+                                ),
+                            )
+                        },
+                        label = { Text("거주 주택") },
+                    )
+                    FilterChip(
+                        selected = asset.category == RealEstateCategory.NON_RESIDENTIAL,
+                        onClick = {
+                            onAssetChange(
+                                asset.copy(
+                                    category = RealEstateCategory.NON_RESIDENTIAL,
+                                    isPrimaryResidence = false,
+                                ),
+                            )
+                        },
+                        label = { Text("비주택") },
+                    )
+                }
+                Text(
+                    text = "재산세: ${RealEstateCategory.PRIMARY_RESIDENCE.label()} 0.25% · ${RealEstateCategory.NON_RESIDENTIAL.label()} 0.4% (간이)",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             ManWonInputField(
                 label = "현재 시세 (총 자산가치)",
                 valueInWon = asset.currentValue,
@@ -141,10 +187,17 @@ fun AssetCardFields(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(text = "1세대 1주택", style = MaterialTheme.typography.bodyMedium)
+                Text(text = "1세대 1주택 (양도세)", style = MaterialTheme.typography.bodyMedium)
                 Switch(
                     checked = asset.isPrimaryResidence,
-                    onCheckedChange = { onAssetChange(asset.copy(isPrimaryResidence = it)) },
+                    onCheckedChange = { checked ->
+                        val category = if (checked) {
+                            RealEstateCategory.PRIMARY_RESIDENCE
+                        } else {
+                            RealEstateCategory.NON_RESIDENTIAL
+                        }
+                        onAssetChange(asset.copy(isPrimaryResidence = checked, category = category))
+                    },
                 )
             }
             val currentYear = Year.now().value
@@ -192,6 +245,11 @@ fun AssetCardFields(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                }
+            }
+            onRemove?.let { remove ->
+                TextButton(onClick = remove) {
+                    Text("부동산 삭제")
                 }
             }
         }
@@ -535,7 +593,8 @@ fun Asset.summaryText(): String = when (this) {
         if (currentValue <= 0 && debtAmount <= 0) {
             "미입력"
         } else {
-            val base = "순자산 ${formatKoreanMan(netEquity)}"
+            val typeLabel = if (category == RealEstateCategory.NON_RESIDENTIAL) " · 비주택" else ""
+            val base = "순자산 ${formatKoreanMan(netEquity)}$typeLabel"
             val currentYear = java.time.Year.now().value
             if (saleYear != null && saleYear > currentYear && expectedSalePrice > 0 && currentValue > 0) {
                 val rate = RealEstateProjection.formatAnnualRate(
@@ -583,8 +642,8 @@ fun Asset.summaryText(): String = when (this) {
     is Asset.HousingPension -> if (enabled && startAge > 0) "${startAge}세 개시" else "미입력"
 }
 
-fun Asset.displayTitle(): String = when (this) {
-    is Asset.RealEstate -> "부동산"
+fun Asset.displayTitle(estateOrdinal: Int = 0, estateCount: Int = 1): String = when (this) {
+    is Asset.RealEstate -> if (estateCount > 1) "부동산 ${estateOrdinal + 1}" else "부동산"
     is Asset.NationalPension -> "국민연금"
     is Asset.SeverancePension -> "퇴직연금"
     is Asset.PersonalPension -> "개인연금"

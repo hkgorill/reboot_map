@@ -34,7 +34,9 @@ object SimulationStateMapper {
 
     fun toPersisted(state: SimulationUiState): SimulationPersistedState {
 
-        val realEstate = state.assets.filterIsInstance<Asset.RealEstate>().firstOrNull()
+        val realEstatesList = state.assets.filterIsInstance<Asset.RealEstate>()
+
+        val legacyRealEstate = RealEstatePersistence.syncLegacyFields(realEstatesList.firstOrNull())
 
         val national = state.assets.filterIsInstance<Asset.NationalPension>().firstOrNull()
 
@@ -90,6 +92,8 @@ object SimulationStateMapper {
 
             propertyTaxRate = assumptions.propertyTaxRate,
 
+            nonResidentialPropertyTaxRate = assumptions.nonResidentialPropertyTaxRate,
+
             comprehensiveRealEstateTaxEnabled = assumptions.comprehensiveRealEstateTaxEnabled,
 
             comprehensiveTaxThreshold = assumptions.comprehensiveTaxThreshold,
@@ -102,19 +106,21 @@ object SimulationStateMapper {
 
             presetSourceNote = state.presetSourceNote,
 
-            realEstateValue = realEstate?.currentValue ?: 0L,
+            realEstates = RealEstatePersistence.toPersistedList(realEstatesList),
 
-            realEstateDebt = realEstate?.debtAmount ?: 0L,
+            realEstateValue = legacyRealEstate.value,
 
-            realEstateAcquisitionCost = realEstate?.acquisitionCost ?: 0L,
+            realEstateDebt = legacyRealEstate.debt,
 
-            realEstateHoldingYears = realEstate?.holdingYears ?: 0,
+            realEstateAcquisitionCost = legacyRealEstate.acquisitionCost,
 
-            realEstateIsPrimaryResidence = realEstate?.isPrimaryResidence ?: false,
+            realEstateHoldingYears = legacyRealEstate.holdingYears,
 
-            realEstateSaleYear = realEstate?.saleYear,
+            realEstateIsPrimaryResidence = legacyRealEstate.isPrimaryResidence,
 
-            realEstateExpectedSalePrice = realEstate?.expectedSalePrice ?: 0L,
+            realEstateSaleYear = legacyRealEstate.saleYear,
+
+            realEstateExpectedSalePrice = legacyRealEstate.expectedSalePrice,
 
             nationalPensionMonthly = national?.monthlyPayout ?: 0L,
 
@@ -266,6 +272,8 @@ object SimulationStateMapper {
 
                 propertyTaxRate = persisted.propertyTaxRate,
 
+                nonResidentialPropertyTaxRate = persisted.nonResidentialPropertyTaxRate,
+
                 comprehensiveRealEstateTaxEnabled = persisted.comprehensiveRealEstateTaxEnabled,
 
                 comprehensiveTaxThreshold = persisted.comprehensiveTaxThreshold,
@@ -280,19 +288,7 @@ object SimulationStateMapper {
 
             assets = defaultAssets(
 
-                realEstateValue = persisted.realEstateValue,
-
-                realEstateDebt = persisted.realEstateDebt,
-
-                realEstateAcquisitionCost = persisted.realEstateAcquisitionCost,
-
-                realEstateHoldingYears = persisted.realEstateHoldingYears,
-
-                realEstateIsPrimaryResidence = persisted.realEstateIsPrimaryResidence,
-
-                realEstateSaleYear = persisted.realEstateSaleYear,
-
-                realEstateExpectedSalePrice = persisted.realEstateExpectedSalePrice,
+                realEstates = RealEstatePersistence.resolveFromPersisted(persisted),
 
                 nationalMonthly = persisted.nationalPensionMonthly,
 
@@ -404,6 +400,8 @@ object SimulationStateMapper {
 
     fun defaultAssets(
 
+        realEstates: List<Asset.RealEstate>? = null,
+
         realEstateValue: Long = 0L,
 
         realEstateDebt: Long = 0L,
@@ -484,13 +482,13 @@ object SimulationStateMapper {
 
         housingPensionHomeEquity: Long = 0L,
 
-    ): List<Asset> = listOf(
+    ): List<Asset> = DefaultAssets.build(
 
-        Asset.RealEstate(
+        realEstates = realEstates ?: DefaultAssets.legacyRealEstate(
 
-            currentValue = realEstateValue,
+            value = realEstateValue,
 
-            debtAmount = realEstateDebt,
+            debt = realEstateDebt,
 
             acquisitionCost = realEstateAcquisitionCost,
 
@@ -504,93 +502,71 @@ object SimulationStateMapper {
 
         ),
 
-        Asset.NationalPension(monthlyPayout = nationalMonthly, startAge = nationalStartAge),
+        nationalMonthly = nationalMonthly,
 
-        Asset.SeverancePension(
+        nationalStartAge = nationalStartAge,
 
-            balance = severanceBalance,
+        severanceBalance = severanceBalance,
 
-            monthlyContribution = severanceMonthly,
+        severanceMonthly = severanceMonthly,
 
-            contributionEndAge = severanceEndAge,
+        severanceEndAge = severanceEndAge,
 
-            payoutStartAge = severancePayoutAge,
+        severancePayoutAge = severancePayoutAge,
 
-            annualReturnRate = severanceReturnRate,
+        severanceReturnRate = severanceReturnRate,
 
-        ),
+        personalBalance = personalBalance,
 
-        Asset.PersonalPension(
+        personalMonthly = personalMonthly,
 
-            balance = personalBalance,
+        personalEndAge = personalEndAge,
 
-            monthlyContribution = personalMonthly,
+        personalPayoutAge = personalPayoutAge,
 
-            contributionEndAge = personalEndAge,
+        personalReturnRate = personalReturnRate,
 
-            payoutStartAge = personalPayoutAge,
+        yellowBalance = yellowBalance,
 
-            annualReturnRate = personalReturnRate,
+        yellowMonthly = yellowMonthly,
 
-        ),
+        yellowEndAge = yellowEndAge,
 
-        Asset.YellowUmbrella(
+        yellowPayoutAge = yellowPayoutAge,
 
-            balance = yellowBalance,
+        yellowReturnRate = yellowReturnRate,
 
-            monthlyContribution = yellowMonthly,
+        investmentValue = investmentValue,
 
-            contributionEndAge = yellowEndAge,
+        investmentReturnRate = investmentReturnRate,
 
-            payoutAge = yellowPayoutAge,
+        cashAmount = cashAmount,
 
-            annualReturnRate = yellowReturnRate,
+        cashYear = cashYear,
 
-        ),
+        employmentMonthly = employmentMonthly,
 
-        Asset.Investment(currentValue = investmentValue, annualReturnRate = investmentReturnRate),
+        employmentStartAge = employmentStartAge,
 
-        Asset.CashSavings(maturityAmount = cashAmount, maturityYear = cashYear),
+        employmentEndAge = employmentEndAge,
 
-        Asset.EmploymentIncome(
+        businessMonthly = businessMonthly,
 
-            monthlyAmount = employmentMonthly,
+        businessStartAge = businessStartAge,
 
-            startAge = employmentStartAge,
+        businessEndAge = businessEndAge,
 
-            endAge = employmentEndAge,
+        otherFixedMonthly = otherFixedMonthly,
 
-        ),
+        otherFixedStartAge = otherFixedStartAge,
 
-        Asset.BusinessIncome(
+        otherFixedEndAge = otherFixedEndAge,
 
-            monthlyAmount = businessMonthly,
+        housingPensionEnabled = housingPensionEnabled,
 
-            startAge = businessStartAge,
+        housingPensionStartAge = housingPensionStartAge,
 
-            endAge = businessEndAge,
-
-        ),
-
-        Asset.OtherFixedIncome(
-
-            monthlyAmount = otherFixedMonthly,
-
-            startAge = otherFixedStartAge,
-
-            endAge = otherFixedEndAge,
-
-        ),
-
-        Asset.HousingPension(
-
-            enabled = housingPensionEnabled,
-
-            startAge = housingPensionStartAge,
-
-            homeEquityOverride = housingPensionHomeEquity,
-
-        ),
+        housingPensionHomeEquity = housingPensionHomeEquity,
 
     )
 

@@ -208,7 +208,16 @@ object SimulationPdfExporter {
             "순현금 ${formatKoreanMan(monthlyNet)}/월"
         appendTaxBreakdownLines(lines, snapshot.taxBreakdown)
         val holding = snapshot.annualHoldingCost
-        if (holding.propertyTax > 0) {
+        if (holding.residentialPropertyTax > 0) {
+            lines += "  · 재산세(주택): ${formatKoreanMan(holding.residentialPropertyTax)}/년"
+        }
+        if (holding.nonResidentialPropertyTax > 0) {
+            lines += "  · 재산세(비주택): ${formatKoreanMan(holding.nonResidentialPropertyTax)}/년"
+        }
+        if (holding.propertyTax > 0 &&
+            holding.residentialPropertyTax == 0L &&
+            holding.nonResidentialPropertyTax == 0L
+        ) {
             lines += "  · 재산세: ${formatKoreanMan(holding.propertyTax)}/년"
         }
         if (holding.comprehensiveRealEstateTax > 0) {

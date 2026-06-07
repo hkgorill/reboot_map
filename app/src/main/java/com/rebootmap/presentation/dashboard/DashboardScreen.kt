@@ -26,6 +26,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -48,6 +49,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.rebootmap.domain.model.Asset
 import com.rebootmap.domain.model.LivingExpenseInflationBase
+import com.rebootmap.domain.model.RealEstateCategory
+import com.rebootmap.domain.model.RealEstateDefaults
 import com.rebootmap.presentation.chart.CashFlowChartCard
 import com.rebootmap.presentation.components.ExitConfirmBackHandler
 import com.rebootmap.presentation.components.ExpandableCard
@@ -187,10 +190,13 @@ fun DashboardScreen(viewModel: SimulationViewModel) {
             }
 
             item {
-                val saleYear = state.assets
-                    .filterIsInstance<Asset.RealEstate>()
-                    .firstOrNull()
+                val estates = state.assets.filterIsInstance<Asset.RealEstate>()
+                val saleYear = estates
+                    .firstOrNull {
+                        it.category == RealEstateCategory.PRIMARY_RESIDENCE && it.saleYear != null
+                    }
                     ?.saleYear
+                    ?: estates.firstOrNull { it.saleYear != null }?.saleYear
                 RelocationScenarioCard(
                     plan = state.relocationPlan,
                     saleYear = saleYear,
@@ -288,13 +294,22 @@ fun DashboardScreen(viewModel: SimulationViewModel) {
                 }
             }
 
+            val realEstates = state.assets.filterIsInstance<Asset.RealEstate>()
             itemsIndexed(
                 items = state.assets,
                 key = { _, asset -> asset.id },
             ) { index, asset ->
-                val referenceAsset = state.referencePreset?.assets?.getOrNull(index)
+                val referenceAsset = state.referencePreset?.assets?.find { it.id == asset.id }
+                    ?: if (asset is Asset.RealEstate && realEstates.size == 1) {
+                        state.referencePreset?.assets?.filterIsInstance<Asset.RealEstate>()?.firstOrNull()
+                    } else {
+                        null
+                    }
+                val estateOrdinal = if (asset is Asset.RealEstate) realEstates.indexOf(asset) else 0
+                val canRemoveEstate = asset is Asset.RealEstate &&
+                    (realEstates.size > 1 || asset.currentValue > 0 || asset.debtAmount > 0)
                 ExpandableCard(
-                    title = asset.displayTitle(),
+                    title = asset.displayTitle(estateOrdinal, realEstates.size),
                     summary = asset.summaryText(),
                     icon = asset.icon(),
                     expanded = asset.id in state.expandedAssetIds,
@@ -304,7 +319,23 @@ fun DashboardScreen(viewModel: SimulationViewModel) {
                         asset = asset,
                         referenceAsset = referenceAsset,
                         onAssetChange = { updated -> viewModel.updateAsset(index, updated) },
+                        onRemove = if (canRemoveEstate) {
+                            { viewModel.removeRealEstate(asset.id) }
+                        } else {
+                            null
+                        },
                     )
+                }
+            }
+
+            item {
+                if (realEstates.size < RealEstateDefaults.MAX_COUNT) {
+                    OutlinedButton(
+                        onClick = viewModel::addRealEstate,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("+ 부동산 추가 (최대 ${RealEstateDefaults.MAX_COUNT}건)")
+                    }
                 }
             }
         }

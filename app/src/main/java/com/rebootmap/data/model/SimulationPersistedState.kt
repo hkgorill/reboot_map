@@ -20,6 +20,7 @@ data class SimulationPersistedState(
     val generalIncomeTaxRate: Double = 0.15,
     val propertyTaxEnabled: Boolean = true,
     val propertyTaxRate: Double = TaxDefaults.PROPERTY_TAX_RATE,
+    val nonResidentialPropertyTaxRate: Double = TaxDefaults.NON_RESIDENTIAL_PROPERTY_TAX_RATE,
     val comprehensiveRealEstateTaxEnabled: Boolean = true,
     val comprehensiveTaxThreshold: Long = TaxDefaults.COMPREHENSIVE_TAX_THRESHOLD,
     val comprehensiveTaxRate: Double = TaxDefaults.COMPREHENSIVE_TAX_RATE,
@@ -33,6 +34,8 @@ data class SimulationPersistedState(
     val realEstateIsPrimaryResidence: Boolean = true,
     val realEstateSaleYear: Int? = null,
     val realEstateExpectedSalePrice: Long = 0L,
+    /** v3: 복수 부동산 — 비어 있으면 레거시 단일 필드로 복원 */
+    val realEstates: List<PersistedRealEstate> = emptyList(),
     val nationalPensionMonthly: Long = 0L,
     val nationalPensionStartAge: Int = 65,
     val severancePensionBalance: Long = 0L,

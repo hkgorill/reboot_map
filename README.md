@@ -65,11 +65,11 @@
 
 | 5.1 | ✅ 완료 | `1.4.1` | [PHASE-05.1](docs/phases/PHASE-05.1.md) | — |
 
-| 6 | 📋 설계 | `1.5.0` (예정) | [PHASE-06](docs/phases/PHASE-06.md) | — |
+| 6 | ✅ 코드 완료 | `1.5.0` | [PHASE-06](docs/phases/PHASE-06.md) | [리포트](docs/reports/phase-06-test-report.md) |
 
 
 
-> **다음 개발:** Phase 6 — 복수 부동산·주택/비주택 보유세 ([`PHASE-06.md`](docs/phases/PHASE-06.md))
+> **다음:** Phase 6 실기기 검증 → 이후 Phase 7 기획
 
 
 

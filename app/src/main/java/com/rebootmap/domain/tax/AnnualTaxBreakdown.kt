@@ -20,6 +20,8 @@ data class AnnualTaxBreakdown(
 
 data class AnnualHoldingCost(
     val propertyTax: Long = 0L,
+    val residentialPropertyTax: Long = 0L,
+    val nonResidentialPropertyTax: Long = 0L,
     val comprehensiveRealEstateTax: Long = 0L,
 ) {
     val total: Long get() = propertyTax + comprehensiveRealEstateTax

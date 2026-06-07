@@ -11,6 +11,7 @@ import com.rebootmap.domain.matching.AssetMatchingEngine
 import com.rebootmap.domain.milestone.LumpSumExpense
 import com.rebootmap.domain.model.Asset
 import com.rebootmap.domain.model.EconomicAssumptions
+import com.rebootmap.domain.model.RealEstateDefaults
 import com.rebootmap.domain.model.SimulationInput
 import com.rebootmap.domain.model.UserProfile
 import com.rebootmap.domain.preset.AgeBasedPreset
@@ -107,6 +108,52 @@ class SimulationViewModel(
                 updated[index] = asset
             }
             state.copy(assets = updated)
+        }
+        calculate()
+    }
+
+    fun updateAssetById(id: String, asset: Asset) {
+        _uiState.update { state ->
+            state.copy(assets = state.assets.map { if (it.id == id) asset else it })
+        }
+        calculate()
+    }
+
+    fun addRealEstate() {
+        val estates = _uiState.value.assets.filterIsInstance<Asset.RealEstate>()
+        if (estates.size >= RealEstateDefaults.MAX_COUNT) return
+        val newId = RealEstateDefaults.nextId(estates) ?: return
+        val newEstate = RealEstateDefaults.empty(newId)
+        _uiState.update { state ->
+            val updated = state.assets.toMutableList()
+            val lastIndex = updated.indexOfLast { it is Asset.RealEstate }
+            val insertAt = if (lastIndex >= 0) lastIndex + 1 else 0
+            updated.add(insertAt, newEstate)
+            state.copy(
+                assets = updated,
+                expandedAssetIds = state.expandedAssetIds + newId,
+            )
+        }
+        calculate()
+    }
+
+    fun removeRealEstate(id: String) {
+        _uiState.update { state ->
+            val remainingEstates = state.assets
+                .filterIsInstance<Asset.RealEstate>()
+                .filter { it.id != id }
+            val updated = state.assets.filter { it.id != id || it !is Asset.RealEstate }
+            val finalAssets = if (remainingEstates.isEmpty()) {
+                updated.toMutableList().apply {
+                    add(0, RealEstateDefaults.empty())
+                }
+            } else {
+                updated
+            }
+            state.copy(
+                assets = finalAssets,
+                expandedAssetIds = state.expandedAssetIds - id,
+            )
         }
         calculate()
     }

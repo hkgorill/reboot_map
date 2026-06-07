@@ -1,7 +1,9 @@
 package com.rebootmap.domain.tax
 
 import com.rebootmap.domain.model.EconomicAssumptions
+import com.rebootmap.domain.model.RealEstateCategory
 import com.rebootmap.domain.model.TaxDefaults
+import com.rebootmap.domain.tax.PropertyHoldingTaxEngine.EstateLine
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -43,7 +45,7 @@ class Phase5TaxEngineTest {
     fun `T32 - 부동산 보유 시 재산세와 종부세가 산출된다`() {
         val holding = PropertyHoldingTaxEngine.calculate(
             PropertyHoldingTaxEngine.Input(
-                netEquity = 800_000_000L,
+                estates = listOf(EstateLine(netEquity = 800_000_000L)),
                 assumptions = EconomicAssumptions(),
             ),
         )
@@ -103,7 +105,7 @@ class Phase5TaxEngineTest {
     fun `보유세 OFF 시 재산세와 종부세가 0이다`() {
         val holding = PropertyHoldingTaxEngine.calculate(
             PropertyHoldingTaxEngine.Input(
-                netEquity = 1_000_000_000L,
+                estates = listOf(EstateLine(netEquity = 1_000_000_000L)),
                 assumptions = EconomicAssumptions(
                     propertyTaxEnabled = false,
                     comprehensiveRealEstateTaxEnabled = false,

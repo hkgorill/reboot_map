@@ -41,6 +41,36 @@ class SimulationStateMapperTest {
     }
 
     @Test
+    fun `복수 부동산 저장-복원이 유지된다`() {
+        val estates = listOf(
+            Asset.RealEstate(
+                id = "real_estate_1",
+                currentValue = 500_000_000L,
+                debtAmount = 100_000_000L,
+                saleYear = null,
+            ),
+            Asset.RealEstate(
+                id = "real_estate_2",
+                currentValue = 200_000_000L,
+                category = com.rebootmap.domain.model.RealEstateCategory.NON_RESIDENTIAL,
+                isPrimaryResidence = false,
+                saleYear = null,
+            ),
+        )
+        val original = SimulationUiState.afterOnboarding(45, 60, 3_000_000L).copy(
+            assets = SimulationStateMapper.defaultAssets(realEstates = estates),
+        )
+
+        val restored = SimulationStateMapper.toUiState(SimulationStateMapper.toPersisted(original))
+        val restoredEstates = restored.assets.filterIsInstance<Asset.RealEstate>()
+
+        assertEquals(2, restoredEstates.size)
+        assertEquals(estates[0].netEquity, restoredEstates[0].netEquity)
+        assertEquals(estates[1].category, restoredEstates[1].category)
+        assertEquals(2, SimulationStateMapper.toPersisted(original).realEstates.size)
+    }
+
+    @Test
     fun `구버전 퇴직연금 필드는 퇴직연금 자산으로 마이그레이션된다`() {
         val legacy = com.rebootmap.data.model.SimulationPersistedState(
             retirementPensionBalance = 50_000_000L,

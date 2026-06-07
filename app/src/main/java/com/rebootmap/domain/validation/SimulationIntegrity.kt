@@ -2,6 +2,7 @@ package com.rebootmap.domain.validation
 
 import com.rebootmap.domain.model.Asset
 import com.rebootmap.domain.model.EconomicAssumptions
+import com.rebootmap.domain.model.RealEstateDefaults
 import com.rebootmap.domain.model.UserProfile
 import com.rebootmap.domain.scenario.RelocationPlan
 
@@ -99,8 +100,31 @@ object SimulationIntegrity {
         else -> emptyList()
     }
 
+    fun validateRealEstateCollection(assets: List<Asset>): List<IntegrityIssue> = buildList {
+        val estates = assets.filterIsInstance<Asset.RealEstate>()
+        if (estates.size > RealEstateDefaults.MAX_COUNT) {
+            add(
+                issue(
+                    IntegrityLevel.ERROR,
+                    "realEstates.count",
+                    "부동산은 최대 ${RealEstateDefaults.MAX_COUNT}건까지 입력할 수 있습니다.",
+                ),
+            )
+        }
+        val duplicateIds = estates.groupBy { it.id }.filterValues { it.size > 1 }.keys
+        if (duplicateIds.isNotEmpty()) {
+            add(
+                issue(
+                    IntegrityLevel.ERROR,
+                    "realEstates.id",
+                    "부동산 ID가 중복되었습니다: ${duplicateIds.joinToString()}",
+                ),
+            )
+        }
+    }
+
     fun validateAssets(assets: List<Asset>): List<IntegrityIssue> =
-        assets.flatMap(::validateAsset)
+        validateRealEstateCollection(assets) + assets.flatMap(::validateAsset)
 
     /** 시뮬레이션에 포함되는 자산만 추려 정합성·반영 여부를 함께 검증 */
     fun validateForSimulation(

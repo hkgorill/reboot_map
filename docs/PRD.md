@@ -307,13 +307,14 @@ netCashFlow = annualIncome - annualExpense - annualTax
 
 ---
 
-### Phase 6 — 복수 부동산 + 주택/비주택 보유세 📋 (설계 초안)
+### Phase 6 — 복수 부동산 + 주택/비주택 보유세 ✅ (코드 완료)
 
 > 상세: [`phases/PHASE-06.md`](phases/PHASE-06.md)
 
-- [ ] 부동산 2건 이상 추가·삭제
-- [ ] 주택/비주택 유형별 재산세
-- [ ] DataStore v3 마이그레이션
+- [x] 부동산 최대 3건 추가·삭제
+- [x] 주택/비주택 유형별 재산세 (0.25% / 0.4%)
+- [x] DataStore v3 마이그레이션 (`realEstates` 리스트)
+- [x] 이용 가이드·PDF breakdown 갱신
 
 ---
 

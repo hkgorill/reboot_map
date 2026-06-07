@@ -2,6 +2,7 @@ package com.rebootmap.domain.preset
 
 import com.rebootmap.domain.model.Asset
 import com.rebootmap.domain.model.EconomicAssumptions
+import com.rebootmap.domain.model.RealEstateCategory
 import com.rebootmap.domain.model.PensionDefaults
 import com.rebootmap.domain.model.InvestmentDefaults
 import com.rebootmap.domain.model.UserProfile
@@ -63,6 +64,7 @@ data class AgeBasedPreset(
                         acquisitionCost = ((bracket.realEstateValueMan - bracket.realEstateDebtMan)
                             .coerceAtLeast(0) * MAN * 65 / 100),
                         holdingYears = (safeAge - 30).coerceIn(2, 30),
+                        category = RealEstateCategory.PRIMARY_RESIDENCE,
                         isPrimaryResidence = true,
                         saleYear = currentYear + (retirementAge - safeAge) + 3,
                     ),

@@ -1,7 +1,7 @@
 # Phase 6 — 복수 부동산 + 주택/비주택 보유세 (설계 초안)
 
-> **상태:** 📋 설계 초안  
-> **버전 (목표):** `1.5.0-phase6`  
+> **상태:** ✅ 개발 완료 (실기기 검증 대기)  
+> **버전:** `1.5.0-phase6`  
 > **선행:** [PHASE-05.1](PHASE-05.1.md)  
 > **작성일:** 2026-06-07
 
@@ -119,4 +119,4 @@ val realEstates: List<PersistedRealEstate> = emptyList()
 
 ---
 
-*다음 단계: P6-S1 착수 (사용자 확인 후)*
+*테스트 리포트: [`phase-06-test-report.md`](../reports/phase-06-test-report.md)*
