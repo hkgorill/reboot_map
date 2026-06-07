@@ -11,6 +11,8 @@ import com.rebootmap.domain.matching.AssetMatchingEngine
 import com.rebootmap.domain.milestone.LumpSumExpense
 import com.rebootmap.domain.model.Asset
 import com.rebootmap.domain.model.EconomicAssumptions
+import com.rebootmap.domain.model.PersonalLoan
+import com.rebootmap.domain.model.PersonalLoanDefaults
 import com.rebootmap.domain.model.RealEstateDefaults
 import com.rebootmap.domain.model.SimulationInput
 import com.rebootmap.domain.model.UserProfile
@@ -137,6 +139,46 @@ class SimulationViewModel(
         calculate()
     }
 
+    fun addPersonalLoan() {
+        val loans = _uiState.value.personalLoans
+        if (loans.size >= PersonalLoanDefaults.MAX_COUNT) return
+        val newId = PersonalLoanDefaults.nextId(loans) ?: return
+        _uiState.update { state ->
+            state.copy(
+                personalLoans = state.personalLoans + PersonalLoanDefaults.empty(newId),
+                expandedLoanIds = state.expandedLoanIds + newId,
+            )
+        }
+        calculate()
+    }
+
+    fun removePersonalLoan(id: String) {
+        _uiState.update { state ->
+            state.copy(
+                personalLoans = state.personalLoans.filter { it.id != id },
+                expandedLoanIds = state.expandedLoanIds - id,
+            )
+        }
+        calculate()
+    }
+
+    fun updatePersonalLoan(loan: PersonalLoan) {
+        _uiState.update { state ->
+            state.copy(
+                personalLoans = state.personalLoans.map { if (it.id == loan.id) loan else it },
+            )
+        }
+        calculate()
+    }
+
+    fun toggleLoanExpanded(loanId: String) {
+        _uiState.update { state ->
+            val expanded = state.expandedLoanIds.toMutableSet()
+            if (loanId in expanded) expanded.remove(loanId) else expanded.add(loanId)
+            state.copy(expandedLoanIds = expanded)
+        }
+    }
+
     fun removeRealEstate(id: String) {
         _uiState.update { state ->
             val remainingEstates = state.assets
@@ -213,6 +255,30 @@ class SimulationViewModel(
         calculate()
     }
 
+    /** 주거 로드맵 — 이주 후 주택 카드 추가 후 구입 건으로 연결 */
+    fun addBuyEstateForRelocation() {
+        val estates = _uiState.value.assets.filterIsInstance<Asset.RealEstate>()
+        if (estates.size >= RealEstateDefaults.MAX_COUNT) return
+        val newId = RealEstateDefaults.nextId(estates) ?: return
+        val newEstate = RealEstateDefaults.empty(newId)
+        _uiState.update { state ->
+            val updated = state.assets.toMutableList()
+            val lastIndex = updated.indexOfLast { it is Asset.RealEstate }
+            val insertAt = if (lastIndex >= 0) lastIndex + 1 else 0
+            updated.add(insertAt, newEstate)
+            state.copy(
+                assets = updated,
+                relocationPlan = state.relocationPlan.copy(
+                    buyEstateId = newId,
+                    newHomeValue = 0L,
+                    newHomeDebt = 0L,
+                ),
+                expandedAssetIds = state.expandedAssetIds + newId,
+            )
+        }
+        calculate()
+    }
+
     fun resetAllInputs() {
         saveJob?.cancel()
         calculateJob?.cancel()
@@ -247,15 +313,18 @@ class SimulationViewModel(
                     ?: preset.assumptions.inflationRate,
             )
             val startYear = Year.now().value
+            val activeLoans = state.personalLoans.filter { it.isSimulationReady() }
             val baseInput = SimulationInput(
                 profile = effectiveProfile,
                 assumptions = effectiveAssumptions,
                 assets = activeAssets,
                 startYear = startYear,
                 lumpSumExpenses = state.lumpSumExpenses,
+                personalLoans = activeLoans,
             )
 
-            val relocationPlan = state.relocationPlan.takeIf { it.isConfigured() }
+            val realEstates = state.assets.filterIsInstance<Asset.RealEstate>()
+            val relocationPlan = state.relocationPlan.takeIf { it.isConfigured(realEstates) }
             val projection = engine.project(
                 baseInput.copy(relocationPlan = relocationPlan),
             )

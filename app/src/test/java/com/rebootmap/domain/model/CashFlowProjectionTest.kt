@@ -3,6 +3,7 @@ package com.rebootmap.domain.model
 import com.rebootmap.domain.tax.AnnualHoldingCost
 import com.rebootmap.domain.tax.AnnualTaxBreakdown
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -48,6 +49,14 @@ class CashFlowProjectionTest {
 
         assertEquals(1, lowReturn.assetDeclineYears(60).size)
         assertTrue(highReturn.assetDeclineYears(60).isEmpty())
+    }
+
+    @Test
+    fun `YearSnapshot relocationFlags 기본값은 비활성`() {
+        val snap = snapshot(year = 2026, age = 60, balance = 100_000_000L)
+        assertFalse(snap.relocationFlags.active)
+        assertFalse(snap.relocationFlags.isTwoHomeOverlap)
+        assertFalse(snap.relocationFlags.isGapPeriod)
     }
 
     @Test

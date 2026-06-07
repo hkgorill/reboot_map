@@ -2,6 +2,7 @@ package com.rebootmap.domain.model
 
 import com.rebootmap.domain.milestone.LumpSumExpense
 import com.rebootmap.domain.scenario.RelocationPlan
+import com.rebootmap.domain.scenario.RelocationYearFlags
 import com.rebootmap.domain.tax.AnnualHoldingCost
 import com.rebootmap.domain.tax.AnnualIncomeBreakdown
 import com.rebootmap.domain.tax.AnnualTaxBreakdown
@@ -24,6 +25,11 @@ data class YearSnapshot(
     val taxBreakdown: AnnualTaxBreakdown,
     val netCashFlow: Long,
     val endingBalance: Long,
+    val relocationFlags: RelocationYearFlags = RelocationYearFlags(),
+    /** 신용·차용 부채 잔액 합계 (순자산 산출용) */
+    val personalLoanBalance: Long = 0L,
+    /** 해당 연도 대출 원리금 상환액 */
+    val annualLoanRepayment: Long = 0L,
 )
 
 data class CashFlowProjection(
@@ -91,4 +97,5 @@ data class SimulationInput(
     val startYear: Int,
     val relocationPlan: RelocationPlan? = null,
     val lumpSumExpenses: List<LumpSumExpense> = emptyList(),
+    val personalLoans: List<PersonalLoan> = emptyList(),
 )

@@ -64,7 +64,8 @@
 
 1. **Phase 6** 실기기 검증 — 복수 부동산·월표 breakdown ([`PHASE-06.md`](phases/PHASE-06.md))
 
-2. Phase 7 기획 (미정)
+2. [Phase 7 — 주거 로드맵](phases/PHASE-07.md) ✅ 코드 완료
+3. [Phase 8 — 신용·차용 부채](phases/PHASE-08.md) ✅ 코드 완료
 
 3. Phase 3·4 정식 실기기 일괄 검증 (미완 시)
 

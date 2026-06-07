@@ -158,7 +158,7 @@ fun MonthlyCashFlowSummaryCard(
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
             Text(
-                text = "총자산(아래 차트) = 유동(현금·투자·연금 잔액) + 비유동(부동산). " +
+                text = "총자산(아래 차트) = 유동 + 비유동(부동산) − 신용·차용 부채 잔액. " +
                     "월 순현금은 현금흐름만 보여 주며, 투자·연금 운용수익·부동산 시세 변동은 총자산 증감에만 반영됩니다.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -208,6 +208,7 @@ private fun MonthlyCashFlowBlock(
             CombinedTaxBreakdownDetail(
                 tax = snapshot.taxBreakdown,
                 holding = snapshot.annualHoldingCost,
+                loanRepayment = snapshot.annualLoanRepayment,
             )
         }
         previousSnapshot?.let { previous ->
@@ -249,8 +250,12 @@ private fun IncomeBreakdownDetail(income: AnnualIncomeBreakdown) {
 private fun CombinedTaxBreakdownDetail(
     tax: AnnualTaxBreakdown,
     holding: AnnualHoldingCost,
+    loanRepayment: Long = 0L,
 ) {
-    val lines = buildTaxBreakdownLines(tax, holding)
+    val lines = buildTaxBreakdownLines(tax, holding).toMutableList()
+    if (loanRepayment > 0) {
+        lines += "대출 상환" to loanRepayment
+    }
     BreakdownDetailLines(lines)
 }
 
@@ -328,8 +333,15 @@ private fun MonthlyCashFlowRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
+        val ageLabel = buildString {
+            append("${snapshot.age}세")
+            when {
+                snapshot.relocationFlags.isTwoHomeOverlap -> append(" ·2주택")
+                snapshot.relocationFlags.isGapPeriod -> append(" ·무주택")
+            }
+        }
         Text(
-            text = "${snapshot.age}세",
+            text = ageLabel,
             modifier = Modifier.weight(0.65f),
             style = MaterialTheme.typography.bodySmall,
             fontWeight = FontWeight.Medium,

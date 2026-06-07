@@ -12,6 +12,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AccountBalance
+import androidx.compose.material.icons.outlined.CreditCard
 import androidx.compose.material.icons.outlined.Paid
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Payments
@@ -49,7 +50,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.rebootmap.domain.model.Asset
 import com.rebootmap.domain.model.LivingExpenseInflationBase
-import com.rebootmap.domain.model.RealEstateCategory
+import com.rebootmap.domain.model.PersonalLoanDefaults
 import com.rebootmap.domain.model.RealEstateDefaults
 import com.rebootmap.presentation.chart.CashFlowChartCard
 import com.rebootmap.presentation.components.ExitConfirmBackHandler
@@ -62,7 +63,10 @@ import com.rebootmap.presentation.components.PercentInputField
 import com.rebootmap.presentation.simulation.AssetCardFields
 import com.rebootmap.presentation.simulation.MilestoneTimelineCard
 import com.rebootmap.presentation.simulation.PresetHints
+import com.rebootmap.presentation.simulation.PersonalLoanCardFields
 import com.rebootmap.presentation.simulation.RelocationScenarioCard
+import com.rebootmap.presentation.simulation.displayTitle
+import com.rebootmap.presentation.simulation.summaryText
 import com.rebootmap.presentation.simulation.MonthlyCashFlowSummaryCard
 import com.rebootmap.presentation.simulation.ResultSummaryCard
 import com.rebootmap.presentation.guide.UserGuideDialog
@@ -191,18 +195,13 @@ fun DashboardScreen(viewModel: SimulationViewModel) {
 
             item {
                 val estates = state.assets.filterIsInstance<Asset.RealEstate>()
-                val saleYear = estates
-                    .firstOrNull {
-                        it.category == RealEstateCategory.PRIMARY_RESIDENCE && it.saleYear != null
-                    }
-                    ?.saleYear
-                    ?: estates.firstOrNull { it.saleYear != null }?.saleYear
                 RelocationScenarioCard(
                     plan = state.relocationPlan,
-                    saleYear = saleYear,
+                    realEstates = estates,
                     expanded = state.isRelocationExpanded,
                     onToggle = viewModel::toggleRelocationExpanded,
                     onPlanChange = viewModel::updateRelocationPlan,
+                    onAddBuyEstate = viewModel::addBuyEstateForRelocation,
                 )
             }
 
@@ -295,38 +294,7 @@ fun DashboardScreen(viewModel: SimulationViewModel) {
             }
 
             val realEstates = state.assets.filterIsInstance<Asset.RealEstate>()
-            itemsIndexed(
-                items = state.assets,
-                key = { _, asset -> asset.id },
-            ) { index, asset ->
-                val referenceAsset = state.referencePreset?.assets?.find { it.id == asset.id }
-                    ?: if (asset is Asset.RealEstate && realEstates.size == 1) {
-                        state.referencePreset?.assets?.filterIsInstance<Asset.RealEstate>()?.firstOrNull()
-                    } else {
-                        null
-                    }
-                val estateOrdinal = if (asset is Asset.RealEstate) realEstates.indexOf(asset) else 0
-                val canRemoveEstate = asset is Asset.RealEstate &&
-                    (realEstates.size > 1 || asset.currentValue > 0 || asset.debtAmount > 0)
-                ExpandableCard(
-                    title = asset.displayTitle(estateOrdinal, realEstates.size),
-                    summary = asset.summaryText(),
-                    icon = asset.icon(),
-                    expanded = asset.id in state.expandedAssetIds,
-                    onToggle = { viewModel.toggleAssetExpanded(asset.id) },
-                ) {
-                    AssetCardFields(
-                        asset = asset,
-                        referenceAsset = referenceAsset,
-                        onAssetChange = { updated -> viewModel.updateAsset(index, updated) },
-                        onRemove = if (canRemoveEstate) {
-                            { viewModel.removeRealEstate(asset.id) }
-                        } else {
-                            null
-                        },
-                    )
-                }
-            }
+            val nonRealEstateAssets = state.assets.filter { it !is Asset.RealEstate }
 
             item {
                 if (realEstates.size < RealEstateDefaults.MAX_COUNT) {
@@ -336,6 +304,94 @@ fun DashboardScreen(viewModel: SimulationViewModel) {
                     ) {
                         Text("+ 부동산 추가 (최대 ${RealEstateDefaults.MAX_COUNT}건)")
                     }
+                }
+            }
+
+            itemsIndexed(
+                items = realEstates,
+                key = { _, estate -> estate.id },
+            ) { _, estate ->
+                val referenceAsset = state.referencePreset?.assets?.find { it.id == estate.id }
+                    ?: if (realEstates.size == 1) {
+                        state.referencePreset?.assets?.filterIsInstance<Asset.RealEstate>()?.firstOrNull()
+                    } else {
+                        null
+                    }
+                val estateOrdinal = realEstates.indexOfFirst { it.id == estate.id }
+                val canRemoveEstate = realEstates.size > 1 || estate.currentValue > 0 || estate.debtAmount > 0
+                ExpandableCard(
+                    title = estate.displayTitle(estateOrdinal, realEstates.size),
+                    summary = estate.summaryText(),
+                    icon = estate.icon(),
+                    expanded = estate.id in state.expandedAssetIds,
+                    onToggle = { viewModel.toggleAssetExpanded(estate.id) },
+                ) {
+                    AssetCardFields(
+                        asset = estate,
+                        referenceAsset = referenceAsset,
+                        onAssetChange = { updated -> viewModel.updateAssetById(estate.id, updated) },
+                        onRemove = if (canRemoveEstate) {
+                            { viewModel.removeRealEstate(estate.id) }
+                        } else {
+                            null
+                        },
+                    )
+                }
+            }
+
+            itemsIndexed(
+                items = nonRealEstateAssets,
+                key = { _, asset -> asset.id },
+            ) { _, asset ->
+                val referenceAsset = state.referencePreset?.assets?.find { it.id == asset.id }
+                ExpandableCard(
+                    title = asset.displayTitle(),
+                    summary = asset.summaryText(),
+                    icon = asset.icon(),
+                    expanded = asset.id in state.expandedAssetIds,
+                    onToggle = { viewModel.toggleAssetExpanded(asset.id) },
+                ) {
+                    AssetCardFields(
+                        asset = asset,
+                        referenceAsset = referenceAsset,
+                        onAssetChange = { updated -> viewModel.updateAssetById(asset.id, updated) },
+                        onRemove = null,
+                    )
+                }
+            }
+
+            val personalLoans = state.personalLoans
+
+            item {
+                if (personalLoans.size < PersonalLoanDefaults.MAX_COUNT) {
+                    OutlinedButton(
+                        onClick = viewModel::addPersonalLoan,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("+ 신용·차용 부채 추가 (최대 ${PersonalLoanDefaults.MAX_COUNT}건)")
+                    }
+                }
+            }
+
+            itemsIndexed(
+                items = personalLoans,
+                key = { _, loan -> loan.id },
+            ) { _, loan ->
+                val loanOrdinal = personalLoans.indexOfFirst { it.id == loan.id }
+                ExpandableCard(
+                    title = loan.displayTitle(loanOrdinal, personalLoans.size),
+                    summary = loan.summaryText(),
+                    icon = Icons.Outlined.CreditCard,
+                    expanded = loan.id in state.expandedLoanIds,
+                    onToggle = { viewModel.toggleLoanExpanded(loan.id) },
+                ) {
+                    PersonalLoanCardFields(
+                        loan = loan,
+                        loanOrdinal = loanOrdinal,
+                        loanCount = personalLoans.size,
+                        onLoanChange = viewModel::updatePersonalLoan,
+                        onRemove = { viewModel.removePersonalLoan(loan.id) },
+                    )
                 }
             }
         }

@@ -2,6 +2,8 @@ package com.rebootmap.domain.validation
 
 import com.rebootmap.domain.model.Asset
 import com.rebootmap.domain.model.EconomicAssumptions
+import com.rebootmap.domain.model.PersonalLoan
+import com.rebootmap.domain.model.PersonalLoanDefaults
 import com.rebootmap.domain.model.RealEstateDefaults
 import com.rebootmap.domain.model.UserProfile
 import com.rebootmap.domain.scenario.RelocationPlan
@@ -52,9 +54,29 @@ object SimulationIntegrity {
         }
     }
 
-    fun validateRelocation(plan: RelocationPlan): List<IntegrityIssue> = buildList {
+    fun validateRelocation(
+        plan: RelocationPlan,
+        estates: List<Asset.RealEstate> = emptyList(),
+    ): List<IntegrityIssue> = buildList {
         if (plan.newHomeDebt > plan.newHomeValue) {
             add(issue(IntegrityLevel.ERROR, "relocation.newHomeDebt", "신규 주택 부채는 시세 이하여야 합니다."))
+        }
+        if (!plan.enabled) return@buildList
+        if (plan.sellEstateId.isNotBlank()) {
+            val sell = estates.find { it.id == plan.sellEstateId }
+            if (sell == null) {
+                add(warn("relocation.sellEstateId", "매각 부동산이 목록에 없어 주거 로드맵이 반영되지 않을 수 있습니다."))
+            } else if (sell.saleYear == null) {
+                add(warn("relocation.sellEstateId", "매각 부동산에 매각 연도가 없어 주거 로드맵이 반영되지 않습니다."))
+            }
+        }
+        if (plan.buyEstateId.isNotBlank()) {
+            if (estates.none { it.id == plan.buyEstateId }) {
+                add(warn("relocation.buyEstateId", "이주 후 부동산이 목록에 없어 주거 로드맵이 반영되지 않을 수 있습니다."))
+            }
+            if (plan.sellEstateId.isNotBlank() && plan.sellEstateId == plan.buyEstateId) {
+                add(issue(IntegrityLevel.ERROR, "relocation.buyEstateId", "매각·구입 부동산은 서로 달라야 합니다."))
+            }
         }
     }
 
@@ -100,6 +122,42 @@ object SimulationIntegrity {
         else -> emptyList()
     }
 
+    fun validatePersonalLoan(loan: PersonalLoan): List<IntegrityIssue> = buildList {
+        if (loan.balance > 0 && loan.monthlyPayment == 0L) {
+            add(
+                warn(
+                    "personalLoan.monthlyPayment",
+                    "월 상환이 없으면 이자만 연간 부담으로 계산됩니다.",
+                ),
+            )
+        }
+        if (loan.repaymentEndAge > 0 && loan.monthlyPayment == 0L && loan.balance > 0) {
+            add(warn("personalLoan.repaymentEndAge", "상환 종료 연령은 월 상환액이 있을 때 의미가 있습니다."))
+        }
+    }
+
+    fun validatePersonalLoanCollection(loans: List<PersonalLoan>): List<IntegrityIssue> = buildList {
+        if (loans.size > PersonalLoanDefaults.MAX_COUNT) {
+            add(
+                issue(
+                    IntegrityLevel.ERROR,
+                    "personalLoans.count",
+                    "신용·차용 부채는 최대 ${PersonalLoanDefaults.MAX_COUNT}건까지 입력할 수 있습니다.",
+                ),
+            )
+        }
+        val duplicateIds = loans.groupBy { it.id }.filterValues { it.size > 1 }.keys
+        if (duplicateIds.isNotEmpty()) {
+            add(
+                issue(
+                    IntegrityLevel.ERROR,
+                    "personalLoans.id",
+                    "부채 ID가 중복되었습니다: ${duplicateIds.joinToString()}",
+                ),
+            )
+        }
+    }
+
     fun validateRealEstateCollection(assets: List<Asset>): List<IntegrityIssue> = buildList {
         val estates = assets.filterIsInstance<Asset.RealEstate>()
         if (estates.size > RealEstateDefaults.MAX_COUNT) {
@@ -132,11 +190,14 @@ object SimulationIntegrity {
         assumptions: EconomicAssumptions,
         assets: List<Asset>,
         relocationPlan: RelocationPlan = RelocationPlan(),
+        personalLoans: List<PersonalLoan> = emptyList(),
     ): List<IntegrityIssue> {
         val issues = buildList {
             addAll(validateProfile(profile))
             addAll(validateAssumptions(assumptions))
-            addAll(validateRelocation(relocationPlan))
+            addAll(validateRelocation(relocationPlan, assets.filterIsInstance<Asset.RealEstate>()))
+            addAll(validatePersonalLoanCollection(personalLoans))
+            addAll(personalLoans.flatMap(::validatePersonalLoan))
             addAll(validateAssets(assets))
         }
         val active = assets.filter { it.isSimulationReady() }

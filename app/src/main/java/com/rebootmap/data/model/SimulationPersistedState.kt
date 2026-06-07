@@ -75,6 +75,9 @@ data class SimulationPersistedState(
     val fixedIncomeStartAge: Int = 0,
     val fixedIncomeEndAge: Int = 0,
     val relocationEnabled: Boolean = false,
+    /** v4: 주거 로드맵 — 매각·구입 부동산 id */
+    val relocationSellEstateId: String = "",
+    val relocationBuyEstateId: String = "",
     val relocationNewHomeValue: Long = 0L,
     val relocationNewHomeDebt: Long = 0L,
     val relocationPurchaseTimingType: String = "SAME_YEAR",
@@ -83,4 +86,6 @@ data class SimulationPersistedState(
     val housingPensionStartAge: Int = 65,
     val housingPensionHomeEquity: Long = 0L,
     val lumpSumExpenses: List<PersistedLumpSumExpense> = emptyList(),
+    /** v5: 신용·차용 부채 */
+    val personalLoans: List<PersistedPersonalLoan> = emptyList(),
 )

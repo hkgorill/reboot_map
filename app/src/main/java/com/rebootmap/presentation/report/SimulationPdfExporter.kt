@@ -10,6 +10,8 @@ import com.rebootmap.domain.model.YearSnapshot
 import com.rebootmap.domain.tax.AnnualTaxBreakdown
 import com.rebootmap.presentation.components.formatKoreanMan
 import com.rebootmap.presentation.simulation.SimulationUiState
+import com.rebootmap.presentation.simulation.displayTitle
+import com.rebootmap.presentation.simulation.relocationTimelineSummary
 import java.io.File
 import java.io.FileOutputStream
 import java.time.LocalDate
@@ -134,9 +136,36 @@ object SimulationPdfExporter {
             }
         }
 
-        if (state.relocationPlan.isConfigured()) {
-            lines += "## 거주지 이동 시나리오"
-            lines += "신규 주택 순자산: ${formatKoreanMan(state.relocationPlan.newHomeEquity)}"
+        val activeLoans = state.personalLoans.filter { it.isSimulationReady() }
+        if (activeLoans.isNotEmpty()) {
+            lines += "## 신용·차용 부채"
+            activeLoans.forEachIndexed { index, loan ->
+                val label = loan.displayTitle(index, activeLoans.size)
+                lines += "$label: ${formatKoreanMan(loan.balance)} · 연 ${(loan.annualInterestRate * 100).toInt()}%"
+                if (loan.monthlyPayment > 0) {
+                    lines += "  월 상환 ${formatKoreanMan(loan.monthlyPayment)}"
+                }
+            }
+        }
+
+        val estates = state.assets.filterIsInstance<com.rebootmap.domain.model.Asset.RealEstate>()
+        if (state.relocationPlan.isConfigured(estates)) {
+            lines += "## 주거 로드맵"
+            state.relocationPlan.resolveSellEstate(estates)?.let { sell ->
+                val index = estates.indexOfFirst { it.id == sell.id }.coerceAtLeast(0)
+                val label = sell.displayTitle(estateOrdinal = index, estateCount = estates.size)
+                lines += "매각: $label${sell.saleYear?.let { " (${it}년)" } ?: ""}"
+            }
+            if (state.relocationPlan.usesLinkedBuyEstate) {
+                state.relocationPlan.resolveBuyEstate(estates)?.let { buy ->
+                    val index = estates.indexOfFirst { it.id == buy.id }.coerceAtLeast(0)
+                    val label = buy.displayTitle(estateOrdinal = index, estateCount = estates.size)
+                    lines += "이주 후: $label · 순자산 ${formatKoreanMan(buy.netEquity)}"
+                }
+            } else if (state.relocationPlan.newHomeValue > 0) {
+                lines += "신규 주택 순자산: ${formatKoreanMan(state.relocationPlan.newHomeEquity)}"
+            }
+            relocationTimelineSummary(state.relocationPlan, estates)?.let { lines += it }
         }
 
         lines += "## 권고 가이드"

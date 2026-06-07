@@ -3,6 +3,7 @@ package com.rebootmap.data.mapper
 
 
 import com.rebootmap.data.model.PersistedLumpSumExpense
+import com.rebootmap.data.model.PersistedPersonalLoan
 
 import com.rebootmap.data.model.SimulationPersistedState
 
@@ -184,6 +185,10 @@ object SimulationStateMapper {
 
             relocationEnabled = state.relocationPlan.enabled,
 
+            relocationSellEstateId = state.relocationPlan.sellEstateId,
+
+            relocationBuyEstateId = state.relocationPlan.buyEstateId,
+
             relocationNewHomeValue = state.relocationPlan.newHomeValue,
 
             relocationNewHomeDebt = state.relocationPlan.newHomeDebt,
@@ -199,6 +204,8 @@ object SimulationStateMapper {
             housingPensionHomeEquity = housingPension?.homeEquityOverride ?: 0L,
 
             lumpSumExpenses = state.lumpSumExpenses.map(PersistedLumpSumExpense::fromDomain),
+
+            personalLoans = state.personalLoans.map(PersistedPersonalLoan::fromDomain),
 
         )
 
@@ -362,6 +369,10 @@ object SimulationStateMapper {
 
                 enabled = persisted.relocationEnabled,
 
+                sellEstateId = persisted.relocationSellEstateId,
+
+                buyEstateId = persisted.relocationBuyEstateId,
+
                 newHomeValue = persisted.relocationNewHomeValue,
 
                 newHomeDebt = persisted.relocationNewHomeDebt,
@@ -387,6 +398,8 @@ object SimulationStateMapper {
             },
 
             lumpSumExpenses = persisted.lumpSumExpenses.map { it.toDomain() },
+
+            personalLoans = persisted.personalLoans.map { it.toDomain() },
 
         )
 

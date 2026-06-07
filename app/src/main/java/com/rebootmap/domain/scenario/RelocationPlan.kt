@@ -1,12 +1,17 @@
 package com.rebootmap.domain.scenario
 
+import com.rebootmap.domain.model.Asset
+import com.rebootmap.domain.model.RealEstateCategory
+
 /**
- * 거주지 이동 시나리오 (Phase 3 P3-01).
- *
- * 기존 주택 매각 후·전 신규 주택 구입과 2주택 겹침 기간을 모델링합니다.
+ * 주거 로드맵 — 매각·구입 부동산 연결 및 2주택·무주택 구간 시뮬 (Phase 7).
  */
 data class RelocationPlan(
     val enabled: Boolean = false,
+    /** 매각할 부동산 id ([Asset.RealEstate.id]) */
+    val sellEstateId: String = "",
+    /** 이주 후 거주 부동산 id. 비어 있으면 [newHomeValue]/[newHomeDebt] 가상 신규 주택 */
+    val buyEstateId: String = "",
     val newHomeValue: Long = 0L,
     val newHomeDebt: Long = 0L,
     val purchaseTiming: PurchaseTiming = PurchaseTiming.SameYearAsSale,
@@ -19,7 +24,36 @@ data class RelocationPlan(
 
     val newHomeEquity: Long get() = (newHomeValue - newHomeDebt).coerceAtLeast(0L)
 
-    fun isConfigured(): Boolean = enabled && newHomeValue > 0
+    val usesLinkedBuyEstate: Boolean get() = buyEstateId.isNotBlank()
+
+    fun isConfigured(estates: List<Asset.RealEstate> = emptyList()): Boolean {
+        if (!enabled) return false
+        if (newHomeValue <= 0 && buyEstateId.isBlank()) return false
+        if (estates.isEmpty()) {
+            return sellEstateId.isNotBlank() || newHomeValue > 0
+        }
+        return resolveSellEstate(estates)?.saleYear != null
+    }
+
+    fun resolveSellEstate(estates: List<Asset.RealEstate>): Asset.RealEstate? {
+        if (sellEstateId.isNotBlank()) {
+            return estates.find { it.id == sellEstateId }
+        }
+        return estates.firstOrNull {
+            it.category == RealEstateCategory.PRIMARY_RESIDENCE && it.saleYear != null
+        } ?: estates.firstOrNull { it.saleYear != null }
+    }
+
+    fun resolveBuyEstate(estates: List<Asset.RealEstate>): Asset.RealEstate? =
+        buyEstateId.takeIf { it.isNotBlank() }?.let { id -> estates.find { it.id == id } }
+
+    /** 매각가 대비 신규 주택 시세 60% 다운사이징 프리셋 */
+    fun withDownsizingPreset(sellEstate: Asset.RealEstate): RelocationPlan = copy(
+        buyEstateId = "",
+        newHomeValue = sellEstate.currentValue * 60 / 100,
+        newHomeDebt = 0L,
+        purchaseTiming = PurchaseTiming.SameYearAsSale,
+    )
 }
 
 sealed class PurchaseTiming {

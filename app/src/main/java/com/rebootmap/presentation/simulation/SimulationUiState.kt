@@ -3,6 +3,7 @@ package com.rebootmap.presentation.simulation
 import com.rebootmap.domain.model.Asset
 import com.rebootmap.domain.model.CashFlowProjection
 import com.rebootmap.domain.model.EconomicAssumptions
+import com.rebootmap.domain.model.PersonalLoan
 import com.rebootmap.domain.model.UserProfile
 import com.rebootmap.domain.matching.AssetSuggestion
 import com.rebootmap.domain.milestone.LumpSumExpense
@@ -14,6 +15,7 @@ data class SimulationUiState(
     val profile: UserProfile = UserProfile(),
     val assumptions: EconomicAssumptions = EconomicAssumptions(),
     val assets: List<Asset> = emptyList(),
+    val personalLoans: List<PersonalLoan> = emptyList(),
     val relocationPlan: RelocationPlan = RelocationPlan(),
     val lumpSumExpenses: List<LumpSumExpense> = emptyList(),
     val expenseMatches: Map<String, List<AssetSuggestion>> = emptyMap(),
@@ -23,6 +25,7 @@ data class SimulationUiState(
     val presetSourceNote: String = "",
     val referencePreset: AgeBasedPreset? = null,
     val expandedAssetIds: Set<String> = emptySet(),
+    val expandedLoanIds: Set<String> = emptySet(),
     val isBasicInfoExpanded: Boolean = false,
     val isRelocationExpanded: Boolean = false,
     val isMilestoneExpanded: Boolean = false,
@@ -35,7 +38,10 @@ data class SimulationUiState(
         get() = assets.filterIsInstance<Asset.HousingPension>().firstOrNull()
 
     val showComparison: Boolean
-        get() = relocationPlan.isConfigured() && baselineProjection != null
+        get() {
+            val estates = assets.filterIsInstance<Asset.RealEstate>()
+            return relocationPlan.isConfigured(estates) && baselineProjection != null
+        }
 
     companion object {
         fun afterOnboarding(

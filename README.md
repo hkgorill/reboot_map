@@ -67,9 +67,13 @@
 
 | 6 | ✅ 코드 완료 | `1.5.1` | [PHASE-06](docs/phases/PHASE-06.md) | [리포트](docs/reports/phase-06-test-report.md) |
 
+| 7 | ✅ 코드 완료 | `1.6.0` | [PHASE-07](docs/phases/PHASE-07.md) | [리포트](docs/reports/phase-07-test-report.md) |
+
+| 8 | ✅ 코드 완료 | `1.7.0` | [PHASE-08](docs/phases/PHASE-08.md) | [리포트](docs/reports/phase-08-test-report.md) |
 
 
-> **다음:** Phase 6 실기기 검증 → 이후 Phase 7 기획
+
+> **다음:** Phase 8 실기기 검증
 
 
 
@@ -157,6 +161,38 @@
 
 
 
+### Phase 7 (코드 완료)
+
+
+
+- **주거 로드맵** — 매각·이주 후 거주 부동산 명시적 연결 (기존 「거주지 이동」 승격)
+
+- **2주택·무주택 구간** — 월표 나이 열·엔진 flags
+
+- **A/B 차트** — 현재 입력 vs 주거 로드맵 적용
+
+- **다운사이징 프리셋** — 매각 시세 60% → 신규 주택 시세
+
+- **DataStore v4** — `relocationSellEstateId` / `relocationBuyEstateId`
+
+
+
+### Phase 8 (코드 완료)
+
+
+
+- **신용·차용 부채** — 최대 5건, 주택담보와 별도 입력
+
+- **순자산** — 총자산에서 부채 잔액 차감
+
+- **월 상환** — 원리금 연간 지출·잔액 감소
+
+- **월표·PDF** — 대출 상환 breakdown
+
+- **대시보드 UX (8.1)** — 부동산·부채 모두 「추가」 버튼이 입력 카드 **위**에 표시
+
+
+
 ---
 
 
@@ -171,7 +207,7 @@
 
 - Vico 차트 · kotlinx-serialization
 
-- JUnit 단위 테스트 (**106건**) · Compose UI 테스트
+- JUnit 단위 테스트 (**121건**) · Compose UI 테스트
 
 
 

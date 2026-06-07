@@ -320,6 +320,29 @@ netCashFlow = annualIncome - annualExpense - annualTax
 
 ---
 
+### Phase 7 — 주거 로드맵 (이주 ↔ 부동산 연동) ✅ (코드 완료)
+
+> 상세: [`phases/PHASE-07.md`](phases/PHASE-07.md) · 버전 `1.6.0`
+
+- [x] 매각·구입 부동산 id 연동 (`sellEstateId` / `buyEstateId`)
+- [x] 2주택·무주택 구간 flags — 월표·엔진
+- [x] A/B 차트 — 현재 입력 vs 주거 로드맵
+- [x] 다운사이징 프리셋 (매각가 60%)
+- [x] DataStore v4 · PDF·이용 가이드 갱신
+
+---
+
+### Phase 8 — 신용·차용 부채 ✅ (코드 완료)
+
+> 상세: [`phases/PHASE-08.md`](phases/PHASE-08.md) · 버전 `1.7.0`
+
+- [x] `PersonalLoan` — 잔액·이자율·월 상환·유형 (최대 5건)
+- [x] 순자산 = 자산 − 부채, 연간 원리금 지출
+- [x] DataStore v5 · 월표·PDF·이용 가이드
+- [x] 대시보드 UX — 부동산·신용부채 「추가」 버튼을 해당 입력 카드 위에 배치
+
+---
+
 ## 7. 테스트 전략
 
 ### 7.1 단위 테스트 (매 Phase)

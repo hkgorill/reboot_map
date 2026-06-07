@@ -122,7 +122,7 @@ fun CashFlowChartCard(
             )
             Text(
                 text = if (showComparison) {
-                    "주황(●) = A 현재 유지 · 파란 실선 = B 거주지 이동"
+                    "주황(●) = A 현재 입력 유지 · 파란 실선 = B 주거 로드맵 적용"
                 } else {
                     "총자산 = 현금+투자+연금 적립 잔액+부동산 · 연금 인출 시 잔액 감소 반영"
                 },
@@ -462,8 +462,8 @@ private fun ComparisonLegend() {
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        TimelineLegendItem(color = AccentCoral, label = "A · 현재 유지")
-        TimelineLegendItem(color = PrimaryBlue, label = "B · 거주지 이동")
+        TimelineLegendItem(color = AccentCoral, label = "A · 현재 입력")
+        TimelineLegendItem(color = PrimaryBlue, label = "B · 주거 로드맵")
     }
 }
 
