@@ -1,7 +1,7 @@
 package com.rebootmap.domain.model
 
 object RealEstateDefaults {
-    const val MAX_COUNT = 3
+    const val MAX_COUNT = 10
 
     fun empty(id: String = "real_estate_1"): Asset.RealEstate = Asset.RealEstate(
         id = id,

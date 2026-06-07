@@ -96,6 +96,8 @@ class CashFlowEngineTest {
 
         assertEquals(0L, at64.annualIncome)
         assertEquals(18_000_000L, at65.annualIncome)
+        assertEquals(at65.annualIncome, at65.incomeBreakdown.total)
+        assertEquals(18_000_000L, at65.incomeBreakdown.nationalPension)
     }
 
     @Test

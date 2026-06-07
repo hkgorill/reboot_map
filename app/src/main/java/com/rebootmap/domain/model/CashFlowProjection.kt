@@ -3,6 +3,7 @@ package com.rebootmap.domain.model
 import com.rebootmap.domain.milestone.LumpSumExpense
 import com.rebootmap.domain.scenario.RelocationPlan
 import com.rebootmap.domain.tax.AnnualHoldingCost
+import com.rebootmap.domain.tax.AnnualIncomeBreakdown
 import com.rebootmap.domain.tax.AnnualTaxBreakdown
 
 data class YearSnapshot(
@@ -14,6 +15,7 @@ data class YearSnapshot(
     val illiquidAssets: Long,
     val totalAssets: Long,
     val annualIncome: Long,
+    val incomeBreakdown: AnnualIncomeBreakdown = AnnualIncomeBreakdown(),
     /** 생활비 + 보유세·종부세 */
     val annualExpense: Long,
     val annualLivingExpense: Long,

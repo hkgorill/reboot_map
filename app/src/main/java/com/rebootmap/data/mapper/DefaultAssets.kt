@@ -94,7 +94,7 @@ internal object DefaultAssets {
         debt: Long = 0L,
         acquisitionCost: Long = 0L,
         holdingYears: Int = 0,
-        isPrimaryResidence: Boolean = false,
+        isPrimaryResidence: Boolean = true,
         saleYear: Int? = null,
         expectedSalePrice: Long = 0L,
     ): List<Asset.RealEstate> = listOf(

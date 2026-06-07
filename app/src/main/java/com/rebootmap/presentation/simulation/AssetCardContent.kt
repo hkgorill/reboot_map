@@ -110,7 +110,7 @@ fun AssetCardFields(
                                 ),
                             )
                         },
-                        label = { Text("거주 주택") },
+                        label = { Text(RealEstateCategory.PRIMARY_RESIDENCE.label()) },
                     )
                     FilterChip(
                         selected = asset.category == RealEstateCategory.NON_RESIDENTIAL,
@@ -122,11 +122,11 @@ fun AssetCardFields(
                                 ),
                             )
                         },
-                        label = { Text("비주택") },
+                        label = { Text(RealEstateCategory.NON_RESIDENTIAL.label()) },
                     )
                 }
                 Text(
-                    text = "재산세: ${RealEstateCategory.PRIMARY_RESIDENCE.label()} 0.25% · ${RealEstateCategory.NON_RESIDENTIAL.label()} 0.4% (간이)",
+                    text = "재산세: 주거용 0.25% · 비주거용 0.4% (간이)",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -593,7 +593,7 @@ fun Asset.summaryText(): String = when (this) {
         if (currentValue <= 0 && debtAmount <= 0) {
             "미입력"
         } else {
-            val typeLabel = if (category == RealEstateCategory.NON_RESIDENTIAL) " · 비주택" else ""
+            val typeLabel = if (category == RealEstateCategory.NON_RESIDENTIAL) " · 비주거용" else ""
             val base = "순자산 ${formatKoreanMan(netEquity)}$typeLabel"
             val currentYear = java.time.Year.now().value
             if (saleYear != null && saleYear > currentYear && expectedSalePrice > 0 && currentValue > 0) {

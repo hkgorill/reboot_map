@@ -410,7 +410,7 @@ object SimulationStateMapper {
 
         realEstateHoldingYears: Int = 0,
 
-        realEstateIsPrimaryResidence: Boolean = false,
+        realEstateIsPrimaryResidence: Boolean = true,
 
         realEstateSaleYear: Int? = null,
 

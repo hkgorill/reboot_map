@@ -18,6 +18,25 @@ data class AnnualTaxBreakdown(
             otherIncomeTax + capitalGainsTax + healthInsurance + longTermCare
 }
 
+/** 연간 수입 breakdown — [total]는 [com.rebootmap.domain.model.YearSnapshot.annualIncome]과 일치 */
+data class AnnualIncomeBreakdown(
+    val nationalPension: Long = 0L,
+    val severancePension: Long = 0L,
+    val personalPension: Long = 0L,
+    val housingPension: Long = 0L,
+    val employmentIncome: Long = 0L,
+    val businessIncome: Long = 0L,
+    val otherFixedIncome: Long = 0L,
+    val realEstateSale: Long = 0L,
+    val cashSavingsMaturity: Long = 0L,
+    val yellowUmbrellaPayout: Long = 0L,
+) {
+    val total: Long
+        get() = nationalPension + severancePension + personalPension + housingPension +
+            employmentIncome + businessIncome + otherFixedIncome +
+            realEstateSale + cashSavingsMaturity + yellowUmbrellaPayout
+}
+
 data class AnnualHoldingCost(
     val propertyTax: Long = 0L,
     val residentialPropertyTax: Long = 0L,

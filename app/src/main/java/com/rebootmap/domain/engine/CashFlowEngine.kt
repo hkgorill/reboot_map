@@ -65,12 +65,18 @@ class CashFlowEngine {
 
         for (year in startYear..endYear) {
             val age = profile.currentAge + (year - startYear)
-            var pensionIncome = 0L
+            var nationalPensionIncome = 0L
+            var severancePensionIncome = 0L
+            var personalPensionIncome = 0L
+            var housingPensionIncome = 0L
             var employmentIncome = 0L
             var businessIncome = 0L
             var otherFixedIncome = 0L
-            var otherIncome = 0L
             var realEstateSaleProceeds = 0L
+            var cashSavingsMaturity = 0L
+            var yellowUmbrellaPayout = 0L
+            var pensionIncome = 0L
+            var otherIncome = 0L
             var capitalGainsTax = 0L
 
             severancePensions.forEach { pension ->
@@ -87,6 +93,7 @@ class CashFlowEngine {
                     val yearsRemaining = (profile.lifeExpectancy - age).coerceAtLeast(1)
                     val withdrawal = balance / yearsRemaining
                     balance -= withdrawal
+                    severancePensionIncome += withdrawal
                     pensionIncome += withdrawal
                 }
                 severanceBalances[pension] = balance
@@ -104,6 +111,7 @@ class CashFlowEngine {
                     val yearsRemaining = (profile.lifeExpectancy - age).coerceAtLeast(1)
                     val withdrawal = balance / yearsRemaining
                     balance -= withdrawal
+                    personalPensionIncome += withdrawal
                     pensionIncome += withdrawal
                 }
                 personalBalances[pension] = balance
@@ -119,6 +127,7 @@ class CashFlowEngine {
                     }
                     yellowBalances[umbrella] = updated
                 } else if (umbrella.payoutAge > 0 && balance > 0) {
+                    yellowUmbrellaPayout += balance
                     otherIncome += balance
                     yellowBalances[umbrella] = 0L
                     paidYellowUmbrellas.add(umbrella.id)
@@ -133,12 +142,14 @@ class CashFlowEngine {
                         startYear = startYear,
                         inflationRate = assumptions.inflationRate,
                     )
+                    nationalPensionIncome += monthly * 12
                     pensionIncome += monthly * 12
                 }
             }
 
             cashSavings.forEach { saving ->
                 if (saving.maturityYear > 0 && year == saving.maturityYear && saving.id !in maturedSavings) {
+                    cashSavingsMaturity += saving.maturityAmount
                     otherIncome += saving.maturityAmount
                     maturedSavings.add(saving.id)
                 }
@@ -152,8 +163,8 @@ class CashFlowEngine {
                     val isPrimaryForTax = estate.isPrimaryResidence && !twoHomeAtSale
 
                     val netAtSale = RealEstateProjection.projectedNetEquity(estate, year, startYear)
-                    otherIncome += netAtSale
                     realEstateSaleProceeds += netAtSale
+                    otherIncome += netAtSale
                     capitalGainsTax += CapitalGainsTaxEngine.calculate(
                         CapitalGainsTaxEngine.Input(
                             salePrice = netAtSale,
@@ -183,6 +194,7 @@ class CashFlowEngine {
                         yearsSincePayoutStart = age - pension.startAge,
                         inflationRate = assumptions.inflationRate,
                     )
+                    housingPensionIncome += inflatedMonthly * 12
                     pensionIncome += inflatedMonthly * 12
                 }
             }
@@ -201,8 +213,19 @@ class CashFlowEngine {
                 investmentValue = applyReturn(investmentValue, investmentRate)
             }
 
-            val annualIncome = pensionIncome + employmentIncome + businessIncome +
-                otherFixedIncome + otherIncome
+            val incomeBreakdown = com.rebootmap.domain.tax.AnnualIncomeBreakdown(
+                nationalPension = nationalPensionIncome,
+                severancePension = severancePensionIncome,
+                personalPension = personalPensionIncome,
+                housingPension = housingPensionIncome,
+                employmentIncome = employmentIncome,
+                businessIncome = businessIncome,
+                otherFixedIncome = otherFixedIncome,
+                realEstateSale = realEstateSaleProceeds,
+                cashSavingsMaturity = cashSavingsMaturity,
+                yellowUmbrellaPayout = yellowUmbrellaPayout,
+            )
+            val annualIncome = incomeBreakdown.total
 
             val annualLivingExpense = if (age >= profile.retirementAge) {
                 inflatedAnnualExpense(
@@ -331,6 +354,7 @@ class CashFlowEngine {
                     illiquidAssets = illiquidAssets,
                     totalAssets = totalAssets,
                     annualIncome = annualIncome,
+                    incomeBreakdown = incomeBreakdown,
                     annualExpense = annualExpense,
                     annualLivingExpense = annualLivingExpense,
                     annualHoldingCost = holdingCost,

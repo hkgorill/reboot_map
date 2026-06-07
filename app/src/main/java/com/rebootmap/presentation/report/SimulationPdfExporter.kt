@@ -198,34 +198,20 @@ object SimulationPdfExporter {
     private fun appendSnapshotCashFlow(lines: MutableList<String>, snapshot: YearSnapshot) {
         val monthlyIncome = snapshot.annualIncome / 12
         val monthlyLiving = snapshot.annualLivingExpense / 12
-        val monthlyHolding = snapshot.annualHoldingCost.total / 12
-        val monthlyTax = snapshot.annualTax / 12
+        val monthlyTax = (snapshot.annualTax + snapshot.annualHoldingCost.total) / 12
         val monthlyNet = snapshot.netCashFlow / 12
         lines += "${snapshot.age}세 — 수입 ${formatKoreanMan(monthlyIncome)}/월, " +
             "생활비 ${formatKoreanMan(monthlyLiving)}/월, " +
-            "부과 ${formatKoreanMan(monthlyHolding)}/월, " +
             "세금 ${formatKoreanMan(monthlyTax)}/월, " +
             "순현금 ${formatKoreanMan(monthlyNet)}/월"
-        appendTaxBreakdownLines(lines, snapshot.taxBreakdown)
-        val holding = snapshot.annualHoldingCost
-        if (holding.residentialPropertyTax > 0) {
-            lines += "  · 재산세(주택): ${formatKoreanMan(holding.residentialPropertyTax)}/년"
-        }
-        if (holding.nonResidentialPropertyTax > 0) {
-            lines += "  · 재산세(비주택): ${formatKoreanMan(holding.nonResidentialPropertyTax)}/년"
-        }
-        if (holding.propertyTax > 0 &&
-            holding.residentialPropertyTax == 0L &&
-            holding.nonResidentialPropertyTax == 0L
-        ) {
-            lines += "  · 재산세: ${formatKoreanMan(holding.propertyTax)}/년"
-        }
-        if (holding.comprehensiveRealEstateTax > 0) {
-            lines += "  · 종부세: ${formatKoreanMan(holding.comprehensiveRealEstateTax)}/년"
-        }
+        appendTaxBreakdownLines(lines, snapshot.taxBreakdown, snapshot.annualHoldingCost)
     }
 
-    private fun appendTaxBreakdownLines(lines: MutableList<String>, breakdown: AnnualTaxBreakdown) {
+    private fun appendTaxBreakdownLines(
+        lines: MutableList<String>,
+        breakdown: AnnualTaxBreakdown,
+        holding: com.rebootmap.domain.tax.AnnualHoldingCost,
+    ) {
         val items = buildList {
             if (breakdown.employmentIncomeTax > 0) add("근로소득세" to breakdown.employmentIncomeTax)
             if (breakdown.businessIncomeTax > 0) add("사업소득세" to breakdown.businessIncomeTax)
@@ -234,6 +220,15 @@ object SimulationPdfExporter {
             if (breakdown.capitalGainsTax > 0) add("양도소득세" to breakdown.capitalGainsTax)
             if (breakdown.healthInsurance > 0) add("건강보험료" to breakdown.healthInsurance)
             if (breakdown.longTermCare > 0) add("장기요양보험" to breakdown.longTermCare)
+            if (holding.residentialPropertyTax > 0) add("재산세(주거용)" to holding.residentialPropertyTax)
+            if (holding.nonResidentialPropertyTax > 0) add("재산세(비주거용)" to holding.nonResidentialPropertyTax)
+            if (holding.propertyTax > 0 &&
+                holding.residentialPropertyTax == 0L &&
+                holding.nonResidentialPropertyTax == 0L
+            ) {
+                add("재산세" to holding.propertyTax)
+            }
+            if (holding.comprehensiveRealEstateTax > 0) add("종부세" to holding.comprehensiveRealEstateTax)
         }
         items.forEach { (label, annual) ->
             lines += "  · $label: ${formatKoreanMan(annual)}/년 (${formatKoreanMan(annual / 12)}/월)"

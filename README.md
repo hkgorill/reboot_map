@@ -65,7 +65,7 @@
 
 | 5.1 | ✅ 완료 | `1.4.1` | [PHASE-05.1](docs/phases/PHASE-05.1.md) | — |
 
-| 6 | ✅ 코드 완료 | `1.5.0` | [PHASE-06](docs/phases/PHASE-06.md) | [리포트](docs/reports/phase-06-test-report.md) |
+| 6 | ✅ 코드 완료 | `1.5.1` | [PHASE-06](docs/phases/PHASE-06.md) | [리포트](docs/reports/phase-06-test-report.md) |
 
 
 
@@ -137,7 +137,23 @@
 
 - **이용 가이드** — ⋮ 메뉴 → 팝업 (사용법·계산식·예시)
 
-- **월표 보조 설명** — 월 부과 정의, 총자산 증감 ≠ 월 순현금×12 안내
+- **월표 보조 설명** — 총자산 증감 ≠ 월 순현금×12 안내 (마일스톤 연령 하단 1회)
+
+
+
+### Phase 6 (코드 완료)
+
+
+
+- **복수 부동산** — 최대 10건 추가·삭제, DataStore v3 (`realEstates`)
+
+- **유형** — 주거용 / 비주거용 (`FilterChip`), 재산세 0.25% / 0.4%
+
+- **월 순수입 카드** — 월 수입·월 세금(보유세 포함) 탭 시 항목별 breakdown
+
+- **만원 입력** — 포커스 중 콤마 미적용으로 중간 삽입 시 커서 유지
+
+- **PDF·가이드** — 주거용/비주거용 재산세, 통합 세금 breakdown
 
 
 
@@ -155,7 +171,7 @@
 
 - Vico 차트 · kotlinx-serialization
 
-- JUnit 단위 테스트 (**96건**) · Compose UI 테스트
+- JUnit 단위 테스트 (**106건**) · Compose UI 테스트
 
 
 

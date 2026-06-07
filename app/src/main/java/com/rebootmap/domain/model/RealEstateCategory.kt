@@ -1,16 +1,16 @@
 package com.rebootmap.domain.model
 
-/** 부동산 유형 — 보유세(재산세) 세율 구분용 */
+/** 부동산 유형 — 보유세(재산세) 세율 구분용 (주거용/비주거용) */
 enum class RealEstateCategory {
-    /** 거주 주택 */
+    /** 주거용 */
     PRIMARY_RESIDENCE,
-    /** 비주택 (임대·상가 등) */
+    /** 비주거용 (임대·상가 등) */
     NON_RESIDENTIAL,
     ;
 
     fun label(): String = when (this) {
-        PRIMARY_RESIDENCE -> "거주 주택"
-        NON_RESIDENTIAL -> "비주택"
+        PRIMARY_RESIDENCE -> "주거용"
+        NON_RESIDENTIAL -> "비주거용"
     }
 
     companion object {

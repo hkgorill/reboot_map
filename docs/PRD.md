@@ -303,18 +303,20 @@ netCashFlow = annualIncome - annualExpense - annualTax
 > 상세: [`phases/PHASE-05.1.md`](phases/PHASE-05.1.md)
 
 - [x] ⋮ 메뉴 「이용 가이드」 팝업 (사용법·계산식·예시)
-- [x] 월 순수입 카드 보조 설명 (월 부과, 총자산 증감)
+- [x] 월 순수입 카드 보조 설명 (총자산 증감, 월 순현금 차이 안내)
 
 ---
 
-### Phase 6 — 복수 부동산 + 주택/비주택 보유세 ✅ (코드 완료)
+### Phase 6 — 복수 부동산 + 주거용/비주거용 보유세 ✅ (코드 완료)
 
-> 상세: [`phases/PHASE-06.md`](phases/PHASE-06.md)
+> 상세: [`phases/PHASE-06.md`](phases/PHASE-06.md) · 버전 `1.5.1`
 
-- [x] 부동산 최대 3건 추가·삭제
-- [x] 주택/비주택 유형별 재산세 (0.25% / 0.4%)
+- [x] 부동산 최대 10건 추가·삭제
+- [x] 주거용/비주거용 유형별 재산세 (0.25% / 0.4%)
 - [x] DataStore v3 마이그레이션 (`realEstates` 리스트)
+- [x] 월표 — 월 수입·월 세금(보유세 포함) 탭 breakdown
 - [x] 이용 가이드·PDF breakdown 갱신
+- [x] 만원 입력 UX (포커스 중 커서 유지)
 
 ---
 

@@ -24,10 +24,15 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.rebootmap.domain.model.CashFlowProjection
 import com.rebootmap.domain.model.YearSnapshot
+import com.rebootmap.domain.tax.AnnualHoldingCost
+import com.rebootmap.domain.tax.AnnualIncomeBreakdown
 import com.rebootmap.domain.tax.AnnualTaxBreakdown
 import com.rebootmap.presentation.components.formatKoreanMan
 import com.rebootmap.presentation.theme.SuccessGreen
 import com.rebootmap.presentation.theme.WarningRed
+
+private fun YearSnapshot.monthlyTaxTotal(): Long =
+    (annualTax + annualHoldingCost.total) / 12
 
 @Composable
 fun MonthlyCashFlowSummaryCard(
@@ -47,6 +52,7 @@ fun MonthlyCashFlowSummaryCard(
         snapshots.any { it.age == age }
     }
 
+    var expandedIncomeAges by remember { mutableStateOf(setOf<Int>()) }
     var expandedTaxAges by remember { mutableStateOf(setOf<Int>()) }
 
     Card(
@@ -64,25 +70,38 @@ fun MonthlyCashFlowSummaryCard(
                 fontWeight = FontWeight.SemiBold,
             )
             Text(
-                text = "월 수입은 세전 · 월 부과는 재산세·종부세(보유) · 월 순현금은 생활비·부과·세금 차감 후",
+                text = "월 수입은 세전 · 월 세금은 소득세·건보·보유세(재산세·종부세) 포함 · 월 순현금은 생활비·세금 차감 후",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
-                text = "월 세금 열 탭 시 세목별 표시",
+                text = "월 수입·월 세금 열 탭 시 항목별 표시",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
             MonthlyCashFlowHeaderRow()
 
+            var hasAssetDeltaNote = false
             milestoneAges.forEach { age ->
                 val index = snapshots.indexOfFirst { it.age == age }
                 if (index >= 0) {
+                    val previous = snapshots.getOrNull(index - 1)
+                    if (previous != null && snapshots[index].totalAssets != previous.totalAssets) {
+                        hasAssetDeltaNote = true
+                    }
                     MonthlyCashFlowBlock(
                         snapshot = snapshots[index],
-                        previousSnapshot = snapshots.getOrNull(index - 1),
+                        previousSnapshot = previous,
+                        incomeExpanded = age in expandedIncomeAges,
                         taxExpanded = age in expandedTaxAges,
+                        onToggleIncomeBreakdown = {
+                            expandedIncomeAges = if (age in expandedIncomeAges) {
+                                expandedIncomeAges - age
+                            } else {
+                                expandedIncomeAges + age
+                            }
+                        },
                         onToggleTaxBreakdown = {
                             expandedTaxAges = if (age in expandedTaxAges) {
                                 expandedTaxAges - age
@@ -92,6 +111,15 @@ fun MonthlyCashFlowSummaryCard(
                         },
                     )
                 }
+            }
+            if (hasAssetDeltaNote) {
+                Text(
+                    text = "※ 월 순현금×12와 다를 수 있음 (투자·연금 운용수익, 부동산 시세, 연금 인출 반영)",
+                    modifier = Modifier.fillMaxWidth(),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
             }
 
             val firstRetired = snapshots.firstOrNull { it.age >= retirementAge && it.annualExpense > 0 }
@@ -106,7 +134,16 @@ fun MonthlyCashFlowSummaryCard(
                 MonthlyCashFlowBlock(
                     snapshot = firstRetired,
                     previousSnapshot = snapshots.getOrNull(index - 1),
+                    incomeExpanded = firstRetired.age in expandedIncomeAges,
                     taxExpanded = firstRetired.age in expandedTaxAges,
+                    onToggleIncomeBreakdown = {
+                        val age = firstRetired.age
+                        expandedIncomeAges = if (age in expandedIncomeAges) {
+                            expandedIncomeAges - age
+                        } else {
+                            expandedIncomeAges + age
+                        }
+                    },
                     onToggleTaxBreakdown = {
                         val age = firstRetired.age
                         expandedTaxAges = if (age in expandedTaxAges) {
@@ -141,12 +178,11 @@ private fun MonthlyCashFlowHeaderRow() {
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        HeaderCell("나이", Modifier.weight(0.6f))
-        HeaderCell("월 수입", Modifier.weight(0.85f))
-        HeaderCell("월 생활비", Modifier.weight(0.85f))
-        HeaderCell("월 부과", Modifier.weight(0.75f))
-        HeaderCell("월 세금", Modifier.weight(0.75f))
-        HeaderCell("월 순현금", Modifier.weight(0.9f))
+        HeaderCell("나이", Modifier.weight(0.65f))
+        HeaderCell("월 수입", Modifier.weight(0.95f))
+        HeaderCell("월 생활비", Modifier.weight(0.95f))
+        HeaderCell("월 세금", Modifier.weight(0.95f))
+        HeaderCell("월 순현금", Modifier.weight(1f))
     }
 }
 
@@ -154,16 +190,25 @@ private fun MonthlyCashFlowHeaderRow() {
 private fun MonthlyCashFlowBlock(
     snapshot: YearSnapshot,
     previousSnapshot: YearSnapshot?,
+    incomeExpanded: Boolean,
     taxExpanded: Boolean,
+    onToggleIncomeBreakdown: () -> Unit,
     onToggleTaxBreakdown: () -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
         MonthlyCashFlowRow(
             snapshot = snapshot,
+            onToggleIncomeBreakdown = onToggleIncomeBreakdown,
             onToggleTaxBreakdown = onToggleTaxBreakdown,
         )
+        AnimatedVisibility(visible = incomeExpanded) {
+            IncomeBreakdownDetail(snapshot.incomeBreakdown)
+        }
         AnimatedVisibility(visible = taxExpanded) {
-            TaxBreakdownDetail(snapshot.taxBreakdown)
+            CombinedTaxBreakdownDetail(
+                tax = snapshot.taxBreakdown,
+                holding = snapshot.annualHoldingCost,
+            )
         }
         previousSnapshot?.let { previous ->
             val assetDelta = snapshot.totalAssets - previous.totalAssets
@@ -178,29 +223,61 @@ private fun MonthlyCashFlowBlock(
                     color = deltaColor,
                     textAlign = TextAlign.Center,
                 )
-                Text(
-                    text = "※ 월 순현금×12와 다를 수 있음 (투자·연금 운용수익, 부동산 시세, 연금 인출 반영)",
-                    modifier = Modifier.fillMaxWidth(),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                )
             }
         }
     }
 }
 
 @Composable
-private fun TaxBreakdownDetail(breakdown: AnnualTaxBreakdown) {
+private fun IncomeBreakdownDetail(income: AnnualIncomeBreakdown) {
     val lines = buildList {
-        if (breakdown.employmentIncomeTax > 0) add("근로" to breakdown.employmentIncomeTax)
-        if (breakdown.businessIncomeTax > 0) add("사업" to breakdown.businessIncomeTax)
-        if (breakdown.pensionIncomeTax > 0) add("연금" to breakdown.pensionIncomeTax)
-        if (breakdown.otherIncomeTax > 0) add("기타" to breakdown.otherIncomeTax)
-        if (breakdown.capitalGainsTax > 0) add("양도" to breakdown.capitalGainsTax)
-        if (breakdown.healthInsurance > 0) add("건보" to breakdown.healthInsurance)
-        if (breakdown.longTermCare > 0) add("장기요양" to breakdown.longTermCare)
+        if (income.employmentIncome > 0) add("직장 소득" to income.employmentIncome)
+        if (income.businessIncome > 0) add("사업 소득" to income.businessIncome)
+        if (income.otherFixedIncome > 0) add("기타 고정수입" to income.otherFixedIncome)
+        if (income.nationalPension > 0) add("국민연금" to income.nationalPension)
+        if (income.severancePension > 0) add("퇴직연금" to income.severancePension)
+        if (income.personalPension > 0) add("개인연금" to income.personalPension)
+        if (income.housingPension > 0) add("주택연금" to income.housingPension)
+        if (income.realEstateSale > 0) add("부동산 매각" to income.realEstateSale)
+        if (income.cashSavingsMaturity > 0) add("현금·적금 만기" to income.cashSavingsMaturity)
+        if (income.yellowUmbrellaPayout > 0) add("노랑우산 일시금" to income.yellowUmbrellaPayout)
     }
+    BreakdownDetailLines(lines)
+}
+
+@Composable
+private fun CombinedTaxBreakdownDetail(
+    tax: AnnualTaxBreakdown,
+    holding: AnnualHoldingCost,
+) {
+    val lines = buildTaxBreakdownLines(tax, holding)
+    BreakdownDetailLines(lines)
+}
+
+private fun buildTaxBreakdownLines(
+    tax: AnnualTaxBreakdown,
+    holding: AnnualHoldingCost,
+): List<Pair<String, Long>> = buildList {
+    if (tax.employmentIncomeTax > 0) add("근로소득세" to tax.employmentIncomeTax)
+    if (tax.businessIncomeTax > 0) add("사업소득세" to tax.businessIncomeTax)
+    if (tax.pensionIncomeTax > 0) add("연금소득세" to tax.pensionIncomeTax)
+    if (tax.otherIncomeTax > 0) add("기타소득세" to tax.otherIncomeTax)
+    if (tax.capitalGainsTax > 0) add("양도소득세" to tax.capitalGainsTax)
+    if (tax.healthInsurance > 0) add("건강보험료" to tax.healthInsurance)
+    if (tax.longTermCare > 0) add("장기요양보험" to tax.longTermCare)
+    if (holding.residentialPropertyTax > 0) add("재산세(주거용)" to holding.residentialPropertyTax)
+    if (holding.nonResidentialPropertyTax > 0) add("재산세(비주거용)" to holding.nonResidentialPropertyTax)
+    if (holding.propertyTax > 0 &&
+        holding.residentialPropertyTax == 0L &&
+        holding.nonResidentialPropertyTax == 0L
+    ) {
+        add("재산세" to holding.propertyTax)
+    }
+    if (holding.comprehensiveRealEstateTax > 0) add("종부세" to holding.comprehensiveRealEstateTax)
+}
+
+@Composable
+private fun BreakdownDetailLines(lines: List<Pair<String, Long>>) {
     if (lines.isEmpty()) return
 
     Column(
@@ -236,15 +313,15 @@ private fun HeaderCell(text: String, modifier: Modifier = Modifier) {
 @Composable
 private fun MonthlyCashFlowRow(
     snapshot: YearSnapshot,
+    onToggleIncomeBreakdown: () -> Unit,
     onToggleTaxBreakdown: () -> Unit,
 ) {
     val monthlyIncome = snapshot.annualIncome / 12
     val monthlyLiving = snapshot.annualLivingExpense / 12
-    val monthlyHolding = snapshot.annualHoldingCost.total / 12
-    val monthlyTax = snapshot.annualTax / 12
+    val monthlyTax = snapshot.monthlyTaxTotal()
     val monthlyNet = snapshot.netCashFlow / 12
     val netColor = if (monthlyNet >= 0) SuccessGreen else WarningRed
-    val hasFlow = monthlyLiving > 0 || monthlyIncome > 0 || monthlyHolding > 0
+    val hasFlow = monthlyLiving > 0 || monthlyIncome > 0 || monthlyTax > 0
 
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -253,32 +330,33 @@ private fun MonthlyCashFlowRow(
     ) {
         Text(
             text = "${snapshot.age}세",
-            modifier = Modifier.weight(0.6f),
+            modifier = Modifier.weight(0.65f),
             style = MaterialTheme.typography.bodySmall,
             fontWeight = FontWeight.Medium,
             textAlign = TextAlign.Center,
         )
-        ValueCell(formatKoreanMan(monthlyIncome), Modifier.weight(0.85f), small = true)
         ValueCell(
-            if (monthlyLiving > 0) formatKoreanMan(monthlyLiving) else "-",
-            Modifier.weight(0.85f),
+            text = if (monthlyIncome > 0) formatKoreanMan(monthlyIncome) else if (hasFlow) "0" else "-",
+            modifier = Modifier
+                .weight(0.95f)
+                .clickable(enabled = hasFlow && monthlyIncome > 0, onClick = onToggleIncomeBreakdown),
             small = true,
         )
         ValueCell(
-            if (monthlyHolding > 0) formatKoreanMan(monthlyHolding) else if (hasFlow) "0" else "-",
-            Modifier.weight(0.75f),
+            if (monthlyLiving > 0) formatKoreanMan(monthlyLiving) else "-",
+            Modifier.weight(0.95f),
             small = true,
         )
         ValueCell(
             text = if (hasFlow && monthlyTax > 0) formatKoreanMan(monthlyTax) else if (hasFlow) "0" else "-",
             modifier = Modifier
-                .weight(0.75f)
+                .weight(0.95f)
                 .clickable(enabled = hasFlow && monthlyTax > 0, onClick = onToggleTaxBreakdown),
             small = true,
         )
         Text(
             text = if (hasFlow) formatKoreanMan(monthlyNet) else "-",
-            modifier = Modifier.weight(0.9f),
+            modifier = Modifier.weight(1f),
             style = MaterialTheme.typography.bodySmall,
             fontWeight = FontWeight.SemiBold,
             color = netColor,
@@ -296,4 +374,3 @@ private fun ValueCell(text: String, modifier: Modifier = Modifier, small: Boolea
         textAlign = TextAlign.Center,
     )
 }
-

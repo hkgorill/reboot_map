@@ -25,7 +25,7 @@ sealed class Asset {
         val acquisitionCost: Long = 0L,
         val holdingYears: Int = 10,
         val category: RealEstateCategory = RealEstateCategory.PRIMARY_RESIDENCE,
-        /** 양도세 1세대1주택 — [category]가 거주 주택이면 true 유지 */
+        /** 양도세 1세대1주택 — [category]가 주거용이면 true 유지 */
         val isPrimaryResidence: Boolean = true,
         val saleYear: Int?,
         /** 매각 예정 연도 시세(총 자산가치). 0이면 현재 시세 유지 */

@@ -62,9 +62,11 @@
 
 
 
-1. **Phase 6** — 복수 부동산·주택/비주택 보유세 ([`PHASE-06.md`](phases/PHASE-06.md))
+1. **Phase 6** 실기기 검증 — 복수 부동산·월표 breakdown ([`PHASE-06.md`](phases/PHASE-06.md))
 
-2. Phase 3·4 정식 실기기 일괄 검증 (미완 시)
+2. Phase 7 기획 (미정)
+
+3. Phase 3·4 정식 실기기 일괄 검증 (미완 시)
 
 
 

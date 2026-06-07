@@ -91,7 +91,8 @@ fun ManWonInputField(
         value = text,
         onValueChange = { raw ->
             val digits = raw.filter { it.isDigit() }
-            text = if (digits.isEmpty()) "" else formatNumberWithComma(digits.toLongOrNull() ?: 0L)
+            // 포커스 중에는 콤마 없이 숫자만 유지 — 중간 삽입 시 커서가 맨 뒤로 튀는 현상 방지
+            text = digits
             onValueChange(parseManWonInput(digits) * MAN_WON)
         },
         label = { Text(label) },
@@ -105,9 +106,12 @@ fun ManWonInputField(
             .fillMaxWidth()
             .bringIntoViewWhenFocused()
             .onFocusChanged { focus ->
-                isFocused = focus.isFocused
-                if (!focus.isFocused) {
-                    val displayMan = valueInWon / MAN_WON
+                val displayMan = valueInWon / MAN_WON
+                if (focus.isFocused) {
+                    isFocused = true
+                    text = if (displayMan == 0L) "" else displayMan.toString()
+                } else {
+                    isFocused = false
                     text = if (displayMan == 0L) "" else formatNumberWithComma(displayMan)
                 }
             },
