@@ -10,12 +10,15 @@ data class AnnualTaxBreakdown(
     val businessIncomeTax: Long = 0L,
     val otherIncomeTax: Long = 0L,
     val capitalGainsTax: Long = 0L,
+    val acquisitionTax: Long = 0L,
+    val brokerageFee: Long = 0L,
     val healthInsurance: Long = 0L,
     val longTermCare: Long = 0L,
 ) {
     val totalTax: Long
         get() = pensionIncomeTax + employmentIncomeTax + businessIncomeTax +
-            otherIncomeTax + capitalGainsTax + healthInsurance + longTermCare
+            otherIncomeTax + capitalGainsTax + acquisitionTax + brokerageFee +
+            healthInsurance + longTermCare
 }
 
 /** 연간 수입 breakdown — [total]는 [com.rebootmap.domain.model.YearSnapshot.annualIncome]과 일치 */
@@ -35,6 +38,14 @@ data class AnnualIncomeBreakdown(
         get() = nationalPension + severancePension + personalPension + housingPension +
             employmentIncome + businessIncome + otherFixedIncome +
             realEstateSale + cashSavingsMaturity + yellowUmbrellaPayout
+
+    /** 부동산 매각·적금 만기·노랑우산 등 일시 유입 */
+    val lumpSumTotal: Long
+        get() = realEstateSale + cashSavingsMaturity + yellowUmbrellaPayout
+
+    /** 연금·근로·사업 등 반복 수입 — 월표 「월 수입」에 사용 */
+    val recurringTotal: Long
+        get() = total - lumpSumTotal
 }
 
 data class AnnualHoldingCost(

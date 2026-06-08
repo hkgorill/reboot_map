@@ -9,6 +9,7 @@ import com.rebootmap.domain.matching.AssetSuggestion
 import com.rebootmap.domain.milestone.LumpSumExpense
 import com.rebootmap.domain.preset.AgeBasedPreset
 import com.rebootmap.domain.scenario.RelocationPlan
+import com.rebootmap.presentation.dashboard.DashboardGroupId
 
 data class SimulationUiState(
     val isOnboardingCompleted: Boolean = false,
@@ -26,8 +27,8 @@ data class SimulationUiState(
     val referencePreset: AgeBasedPreset? = null,
     val expandedAssetIds: Set<String> = emptySet(),
     val expandedLoanIds: Set<String> = emptySet(),
-    val isBasicInfoExpanded: Boolean = false,
-    val isRelocationExpanded: Boolean = false,
+    val expandedDashboardGroups: Set<DashboardGroupId> = setOf(DashboardGroupId.RESULTS),
+    val isTimingConsultExpanded: Boolean = false,
     val isMilestoneExpanded: Boolean = false,
     val isLoading: Boolean = true,
 ) {
@@ -40,7 +41,8 @@ data class SimulationUiState(
     val showComparison: Boolean
         get() {
             val estates = assets.filterIsInstance<Asset.RealEstate>()
-            return relocationPlan.isConfigured(estates) && baselineProjection != null
+            val configured = estates.count { it.currentValue > 0 || it.debtAmount > 0 }
+            return configured >= 1 && baselineProjection != null
         }
 
     companion object {

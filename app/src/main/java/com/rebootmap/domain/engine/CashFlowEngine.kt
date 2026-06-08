@@ -9,10 +9,11 @@ import com.rebootmap.domain.model.RealEstateProjection
 import com.rebootmap.domain.model.SimulationInput
 import com.rebootmap.domain.model.UserProfile
 import com.rebootmap.domain.model.YearSnapshot
-import com.rebootmap.domain.scenario.PurchaseTiming
-import com.rebootmap.domain.scenario.RelocationPlan
+import com.rebootmap.domain.portfolio.RealEstatePortfolioEngine
 import com.rebootmap.domain.scenario.RelocationYearFlags
+import com.rebootmap.domain.tax.AcquisitionTaxEngine
 import com.rebootmap.domain.tax.AnnualTaxBreakdown
+import com.rebootmap.domain.tax.BrokerageFeeEngine
 import com.rebootmap.domain.tax.CapitalGainsTaxEngine
 import com.rebootmap.domain.tax.HealthInsurancePremiumEngine
 import com.rebootmap.domain.tax.HousingPensionEngine
@@ -43,8 +44,6 @@ class CashFlowEngine {
         val otherFixedIncomes = input.assets.filterIsInstance<Asset.OtherFixedIncome>()
         val realEstates = input.assets.filterIsInstance<Asset.RealEstate>()
         val housingPensions = input.assets.filterIsInstance<Asset.HousingPension>()
-        val relocationPlan = input.relocationPlan?.takeIf { it.isConfigured(realEstates) }
-        val relocationSchedule = relocationPlan?.let { buildRelocationSchedule(it, realEstates) }
         val personalLoans = input.personalLoans.filter { it.isSimulationReady() }
 
         val severanceBalances = severancePensions.associateWith { it.balance }.toMutableMap()
@@ -58,7 +57,6 @@ class CashFlowEngine {
         val paidYellowUmbrellas = mutableSetOf<String>()
 
         var liquidBalance = 0L
-        var newHomeOwned = relocationSchedule?.purchaseYear?.let { it < startYear } ?: false
         val loanBalances = personalLoans.associateWith { it.balance }.toMutableMap()
         val snapshots = mutableListOf<YearSnapshot>()
         var depletionYear: Int? = null
@@ -79,6 +77,8 @@ class CashFlowEngine {
             var pensionIncome = 0L
             var otherIncome = 0L
             var capitalGainsTax = 0L
+            var acquisitionTax = 0L
+            var brokerageFee = 0L
 
             severancePensions.forEach { pension ->
                 var balance = severanceBalances.getValue(pension)
@@ -157,25 +157,73 @@ class CashFlowEngine {
             }
 
             realEstates.forEach { estate ->
-                if (estate.saleYear == year && estate.id !in soldRealEstates) {
-                    val twoHomeAtSale = relocationSchedule?.let { schedule ->
-                        estate.id == schedule.sellEstateId &&
-                            schedule.purchaseYear != null &&
-                            schedule.purchaseYear < year
-                    } ?: false
-                    val isPrimaryForTax = estate.isPrimaryResidence && !twoHomeAtSale
+                val acqYear = estate.acquisitionYear
+                if (acqYear != null && acqYear == year) {
+                    val purchasePrice = estate.currentValue.coerceAtLeast(0L)
+                    if (purchasePrice > 0) {
+                        val othersAtBuy = RealEstatePortfolioEngine.homeCount(
+                            realEstates,
+                            year - 1,
+                            startYear,
+                            soldRealEstates,
+                        )
+                        acquisitionTax += AcquisitionTaxEngine.calculate(
+                            AcquisitionTaxEngine.Input(
+                                acquisitionPrice = purchasePrice,
+                                category = estate.category,
+                                otherHomesAtAcquisition = othersAtBuy,
+                            ),
+                        ).tax
+                        brokerageFee += BrokerageFeeEngine.calculate(
+                            purchasePrice,
+                            BrokerageFeeEngine.Side.PURCHASE,
+                        )
+                    }
+                }
+            }
 
+            realEstates.forEach { estate ->
+                if (estate.saleYear == year && estate.id !in soldRealEstates) {
+                    val grossAtSale = RealEstateProjection.projectedGrossValue(estate, year, startYear)
                     val netAtSale = RealEstateProjection.projectedNetEquity(estate, year, startYear)
+                    val otherHomes = RealEstatePortfolioEngine.otherHomesAtSale(
+                        estate,
+                        realEstates,
+                        year,
+                        startYear,
+                        soldRealEstates,
+                    )
+                    val tempExempt = RealEstatePortfolioEngine.qualifiesTemporaryTwoHomeExemption(
+                        estate,
+                        realEstates,
+                        year,
+                        startYear,
+                        soldRealEstates,
+                    )
+                    val holdingYears = RealEstatePortfolioEngine.holdingYearsAtSale(
+                        estate,
+                        year,
+                        startYear,
+                    )
+
                     realEstateSaleProceeds += netAtSale
                     otherIncome += netAtSale
                     capitalGainsTax += CapitalGainsTaxEngine.calculate(
                         CapitalGainsTaxEngine.Input(
-                            salePrice = netAtSale,
+                            salePrice = grossAtSale.coerceAtLeast(netAtSale),
                             acquisitionCost = estate.effectiveAcquisitionCost,
-                            holdingYears = estate.holdingYears,
-                            isPrimaryResidence = isPrimaryForTax,
+                            holdingYears = holdingYears,
+                            isPrimaryResidence = estate.isPrimaryResidence,
+                            otherHomesAtSale = otherHomes,
+                            temporaryTwoHomeExempt = tempExempt,
                         ),
                     ).tax
+                    if (grossAtSale > 0) {
+                        brokerageFee += BrokerageFeeEngine.calculate(
+                            grossAtSale,
+                            BrokerageFeeEngine.Side.SALE,
+                        )
+                    }
                     soldRealEstates.add(estate.id)
                 }
             }
@@ -183,8 +231,12 @@ class CashFlowEngine {
             housingPensions.forEach { pension ->
                 if (pension.enabled && pension.startAge > 0 && age >= pension.startAge) {
                     val homeEquity = pension.homeEquityOverride.takeIf { it > 0 }
-                        ?: estatesActiveInYear(realEstates, soldRealEstates, relocationSchedule, year)
-                            .sumOf { RealEstateProjection.projectedNetEquity(it, year, startYear) }
+                        ?: RealEstatePortfolioEngine.ownedEstates(
+                            realEstates,
+                            year,
+                            startYear,
+                            soldRealEstates,
+                        ).sumOf { RealEstateProjection.projectedNetEquity(it, year, startYear) }
                     val monthly = HousingPensionEngine.calculateMonthly(
                         HousingPensionEngine.Input(
                             homeEquity = homeEquity,
@@ -247,26 +299,20 @@ class CashFlowEngine {
                 0L
             }
 
-            val ownsNewHome = newHomeOwned || relocationSchedule?.purchaseYear == year
-            val virtualHomeEquity = if (
-                ownsNewHome &&
-                relocationSchedule != null &&
-                relocationSchedule.linkedBuyEstateId == null
-            ) {
-                relocationSchedule.virtualNewHomeEquity
-            } else {
-                0L
-            }
-            val countedEstates = estatesActiveInYear(realEstates, soldRealEstates, relocationSchedule, year)
+            val countedEstates = RealEstatePortfolioEngine.ownedEstates(
+                realEstates,
+                year,
+                startYear,
+                soldRealEstates,
+            )
             val illiquidForHolding = countedEstates
-                .sumOf { RealEstateProjection.projectedNetEquity(it, year, startYear) } + virtualHomeEquity
+                .sumOf { RealEstateProjection.projectedNetEquity(it, year, startYear) }
             val holdingCost = PropertyHoldingTaxEngine.calculate(
                 PropertyHoldingTaxEngine.Input(
                     estates = buildEstateHoldingLines(
                         estates = countedEstates,
                         year = year,
                         startYear = startYear,
-                        virtualHomeEquity = virtualHomeEquity,
                     ),
                     assumptions = assumptions,
                 ),
@@ -309,6 +355,8 @@ class CashFlowEngine {
 
             val taxBreakdown = incomeTaxBreakdown.copy(
                 capitalGainsTax = capitalGainsTax,
+                acquisitionTax = acquisitionTax,
+                brokerageFee = brokerageFee,
                 healthInsurance = healthResult.annualHealthInsurance,
                 longTermCare = healthResult.annualLongTermCare,
             )
@@ -344,9 +392,21 @@ class CashFlowEngine {
                 liquidBalance = result.liquidBalance
             }
 
-            if (relocationSchedule?.purchaseYear == year && !newHomeOwned) {
-                liquidBalance -= relocationSchedule.purchaseEquity(realEstates, year, startYear)
-                newHomeOwned = true
+            realEstates.forEach { estate ->
+                if (estate.acquisitionYear == year && estate.currentValue > 0) {
+                    val downPayment = (estate.currentValue - estate.debtAmount).coerceAtLeast(0L)
+                    if (downPayment > 0) {
+                        val result = applyOutflow(
+                            amount = downPayment,
+                            investmentValue = investmentValue,
+                            severanceBalances = severanceBalances,
+                            personalBalances = personalBalances,
+                            liquidBalance = liquidBalance,
+                        )
+                        investmentValue = result.investmentValue
+                        liquidBalance = result.liquidBalance
+                    }
+                }
             }
 
             val illiquidAssets = illiquidForHolding
@@ -384,7 +444,12 @@ class CashFlowEngine {
                     taxBreakdown = taxBreakdown,
                     netCashFlow = annualIncome - annualExpense - annualTax,
                     endingBalance = endingBalance,
-                    relocationFlags = relocationFlagsForYear(relocationSchedule, year),
+                    relocationFlags = RealEstatePortfolioEngine.portfolioFlags(
+                        realEstates,
+                        year,
+                        startYear,
+                        soldRealEstates,
+                    ),
                     personalLoanBalance = personalLoanBalance,
                     annualLoanRepayment = annualLoanRepayment,
                 ),
@@ -456,93 +521,14 @@ class CashFlowEngine {
         return (1.0 + inflationRate).pow(years.toDouble())
     }
 
-    private fun estatesActiveInYear(
-        estates: List<Asset.RealEstate>,
-        sold: Set<String>,
-        schedule: RelocationSchedule?,
-        year: Int,
-    ): List<Asset.RealEstate> = estates.filter { estate ->
-        if (estate.id in sold) return@filter false
-        val linkedBuy = schedule?.linkedBuyEstateId
-        if (linkedBuy != null && estate.id == linkedBuy) {
-            val purchaseYear = schedule.purchaseYear ?: return@filter false
-            return@filter year >= purchaseYear
-        }
-        true
-    }
-
     private fun buildEstateHoldingLines(
         estates: List<Asset.RealEstate>,
         year: Int,
         startYear: Int,
-        virtualHomeEquity: Long,
-    ): List<PropertyHoldingTaxEngine.EstateLine> {
-        val lines = estates.map { estate ->
-            PropertyHoldingTaxEngine.EstateLine(
-                netEquity = RealEstateProjection.projectedNetEquity(estate, year, startYear),
-                category = estate.category,
-            )
-        }.toMutableList()
-        if (virtualHomeEquity > 0) {
-            lines += PropertyHoldingTaxEngine.EstateLine(
-                netEquity = virtualHomeEquity,
-                category = RealEstateCategory.PRIMARY_RESIDENCE,
-            )
-        }
-        return lines
-    }
-
-    private fun relocationFlagsForYear(schedule: RelocationSchedule?, year: Int): RelocationYearFlags {
-        if (schedule == null) return RelocationYearFlags()
-        val purchase = schedule.purchaseYear ?: return RelocationYearFlags(active = true)
-        val sale = schedule.saleYear
-        val twoHome = year >= purchase && year < sale
-        val gap = sale < purchase && year > sale && year < purchase
-        return RelocationYearFlags(
-            active = true,
-            isTwoHomeOverlap = twoHome,
-            isGapPeriod = gap,
-        )
-    }
-
-    private data class RelocationSchedule(
-        val saleYear: Int,
-        val purchaseYear: Int?,
-        val sellEstateId: String,
-        val linkedBuyEstateId: String?,
-        val virtualNewHomeEquity: Long,
-    ) {
-        fun purchaseEquity(
-            estates: List<Asset.RealEstate>,
-            year: Int,
-            startYear: Int,
-        ): Long {
-            linkedBuyEstateId?.let { id ->
-                val estate = estates.find { it.id == id } ?: return virtualNewHomeEquity
-                return RealEstateProjection.projectedNetEquity(estate, year, startYear)
-            }
-            return virtualNewHomeEquity
-        }
-    }
-
-    private fun buildRelocationSchedule(
-        plan: RelocationPlan,
-        estates: List<Asset.RealEstate>,
-    ): RelocationSchedule? {
-        val sell = plan.resolveSellEstate(estates) ?: return null
-        val saleYear = sell.saleYear ?: return null
-        val purchaseYear = when (val timing = plan.purchaseTiming) {
-            is PurchaseTiming.SameYearAsSale -> saleYear
-            is PurchaseTiming.BeforeSale -> saleYear - timing.years
-            is PurchaseTiming.AfterSale -> saleYear + timing.years
-        }
-        val buy = plan.resolveBuyEstate(estates)
-        return RelocationSchedule(
-            saleYear = saleYear,
-            purchaseYear = purchaseYear,
-            sellEstateId = sell.id,
-            linkedBuyEstateId = buy?.id,
-            virtualNewHomeEquity = if (buy != null) 0L else plan.newHomeEquity,
+    ): List<PropertyHoldingTaxEngine.EstateLine> = estates.map { estate ->
+        PropertyHoldingTaxEngine.EstateLine(
+            netEquity = RealEstateProjection.projectedNetEquity(estate, year, startYear),
+            category = estate.category,
         )
     }
 

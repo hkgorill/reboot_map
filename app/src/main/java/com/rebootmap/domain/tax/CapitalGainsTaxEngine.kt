@@ -22,6 +22,10 @@ object CapitalGainsTaxEngine {
         val acquisitionCost: Long,
         val holdingYears: Int,
         val isPrimaryResidence: Boolean = true,
+        /** 매도 직전 다른 주택 보유 수 */
+        val otherHomesAtSale: Int = 0,
+        /** 일시적 1가구 2주택 비과세 간이 적용 */
+        val temporaryTwoHomeExempt: Boolean = false,
     )
 
     data class Result(
@@ -45,7 +49,20 @@ object CapitalGainsTaxEngine {
             )
         }
 
-        if (input.isPrimaryResidence && input.holdingYears >= PRIMARY_RESIDENCE_MIN_YEARS) {
+        if (input.temporaryTwoHomeExempt && input.isPrimaryResidence &&
+            input.holdingYears >= PRIMARY_RESIDENCE_MIN_YEARS
+        ) {
+            return Result(
+                taxableGain = 0L,
+                tax = 0L,
+                isExempt = true,
+                exemptionReason = "일시적 1가구 2주택 비과세 (구주택 3년 이내 처분, 간이)",
+            )
+        }
+
+        if (input.otherHomesAtSale == 0 && input.isPrimaryResidence &&
+            input.holdingYears >= PRIMARY_RESIDENCE_MIN_YEARS
+        ) {
             return Result(
                 taxableGain = 0L,
                 tax = 0L,
@@ -57,13 +74,16 @@ object CapitalGainsTaxEngine {
         val holdingDeduction = (input.holdingYears * HOLDING_DEDUCTION_PER_YEAR)
             .coerceIn(0.0, MAX_HOLDING_DEDUCTION)
         val taxableGain = (gain * (1.0 - holdingDeduction)).roundToLong()
-        val tax = progressiveTax(taxableGain)
+        var tax = progressiveTax(taxableGain)
+        if (input.otherHomesAtSale > 0) {
+            tax = (tax * 1.1).roundToLong()
+        }
 
         return Result(
             taxableGain = taxableGain,
             tax = tax,
             isExempt = false,
-            exemptionReason = null,
+            exemptionReason = if (input.otherHomesAtSale > 0) "다주택 중과(+10%, 간이)" else null,
         )
     }
 

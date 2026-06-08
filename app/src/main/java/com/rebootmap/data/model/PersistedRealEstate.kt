@@ -13,6 +13,7 @@ data class PersistedRealEstate(
     val acquisitionCost: Long = 0L,
     val holdingYears: Int = 10,
     val isPrimaryResidence: Boolean = true,
+    val acquisitionYear: Int? = null,
     val saleYear: Int? = null,
     val expectedSalePrice: Long = 0L,
 ) {
@@ -26,6 +27,7 @@ data class PersistedRealEstate(
             holdingYears = holdingYears,
             category = resolvedCategory,
             isPrimaryResidence = resolvedCategory == RealEstateCategory.PRIMARY_RESIDENCE,
+            acquisitionYear = acquisitionYear,
             saleYear = saleYear,
             expectedSalePrice = expectedSalePrice,
         )
@@ -40,6 +42,7 @@ data class PersistedRealEstate(
             acquisitionCost = estate.acquisitionCost,
             holdingYears = estate.holdingYears,
             isPrimaryResidence = estate.isPrimaryResidence,
+            acquisitionYear = estate.acquisitionYear,
             saleYear = estate.saleYear,
             expectedSalePrice = estate.expectedSalePrice,
         )

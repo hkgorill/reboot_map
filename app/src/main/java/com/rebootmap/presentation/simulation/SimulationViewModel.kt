@@ -17,8 +17,9 @@ import com.rebootmap.domain.model.RealEstateDefaults
 import com.rebootmap.domain.model.SimulationInput
 import com.rebootmap.domain.model.UserProfile
 import com.rebootmap.domain.preset.AgeBasedPreset
-import com.rebootmap.domain.scenario.RelocationPlan
+import com.rebootmap.domain.portfolio.RealEstateTimingAdvisoryEngine
 import com.rebootmap.presentation.components.InvestmentReturnRate
+import com.rebootmap.presentation.dashboard.DashboardGroupId
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -65,7 +66,13 @@ class SimulationViewModel(
             currentAge = safeAge,
             retirementAge = retirementAge.coerceIn(safeAge, 100),
             monthlyLivingExpense = monthlyLivingExpense.coerceAtLeast(0L),
-        ).copy(isLoading = false)
+        ).copy(
+            isLoading = false,
+            expandedDashboardGroups = setOf(
+                DashboardGroupId.RESULTS,
+                DashboardGroupId.BASIC_INFO,
+            ),
+        )
         lastPresetAge = safeAge
         calculate()
         persistState()
@@ -134,6 +141,7 @@ class SimulationViewModel(
             state.copy(
                 assets = updated,
                 expandedAssetIds = state.expandedAssetIds + newId,
+                expandedDashboardGroups = state.expandedDashboardGroups + DashboardGroupId.REAL_ESTATE,
             )
         }
         calculate()
@@ -147,6 +155,7 @@ class SimulationViewModel(
             state.copy(
                 personalLoans = state.personalLoans + PersonalLoanDefaults.empty(newId),
                 expandedLoanIds = state.expandedLoanIds + newId,
+                expandedDashboardGroups = state.expandedDashboardGroups + DashboardGroupId.DEBT,
             )
         }
         calculate()
@@ -215,12 +224,12 @@ class SimulationViewModel(
         }
     }
 
-    fun toggleBasicInfoExpanded() {
-        _uiState.update { it.copy(isBasicInfoExpanded = !it.isBasicInfoExpanded) }
-    }
-
-    fun toggleRelocationExpanded() {
-        _uiState.update { it.copy(isRelocationExpanded = !it.isRelocationExpanded) }
+    fun toggleDashboardGroup(group: DashboardGroupId) {
+        _uiState.update { state ->
+            val expanded = state.expandedDashboardGroups.toMutableSet()
+            if (group in expanded) expanded.remove(group) else expanded.add(group)
+            state.copy(expandedDashboardGroups = expanded)
+        }
     }
 
     fun toggleMilestoneExpanded() {
@@ -250,30 +259,44 @@ class SimulationViewModel(
         calculate()
     }
 
-    fun updateRelocationPlan(plan: RelocationPlan) {
-        _uiState.update { it.copy(relocationPlan = plan) }
+    fun toggleTimingConsultExpanded() {
+        _uiState.update { it.copy(isTimingConsultExpanded = !it.isTimingConsultExpanded) }
+    }
+
+    fun updateEstateSaleYear(estateId: String, saleYear: Int) {
+        _uiState.update { state ->
+            state.copy(
+                assets = state.assets.map { asset ->
+                    if (asset is Asset.RealEstate && asset.id == estateId) {
+                        asset.copy(
+                            saleYear = saleYear,
+                            expectedSalePrice = asset.expectedSalePrice.takeIf { it > 0 }
+                                ?: asset.currentValue,
+                        )
+                    } else {
+                        asset
+                    }
+                },
+            )
+        }
         calculate()
     }
 
-    /** 주거 로드맵 — 이주 후 주택 카드 추가 후 구입 건으로 연결 */
-    fun addBuyEstateForRelocation() {
+    fun applyTimingSuggestions() {
         val estates = _uiState.value.assets.filterIsInstance<Asset.RealEstate>()
-        if (estates.size >= RealEstateDefaults.MAX_COUNT) return
-        val newId = RealEstateDefaults.nextId(estates) ?: return
-        val newEstate = RealEstateDefaults.empty(newId)
+        val report = RealEstateTimingAdvisoryEngine.evaluate(estates, Year.now().value)
+        if (report.suggestedSaleYears.isEmpty()) return
         _uiState.update { state ->
-            val updated = state.assets.toMutableList()
-            val lastIndex = updated.indexOfLast { it is Asset.RealEstate }
-            val insertAt = if (lastIndex >= 0) lastIndex + 1 else 0
-            updated.add(insertAt, newEstate)
             state.copy(
-                assets = updated,
-                relocationPlan = state.relocationPlan.copy(
-                    buyEstateId = newId,
-                    newHomeValue = 0L,
-                    newHomeDebt = 0L,
-                ),
-                expandedAssetIds = state.expandedAssetIds + newId,
+                assets = state.assets.map { asset ->
+                    if (asset is Asset.RealEstate) {
+                        report.suggestedSaleYears[asset.id]?.let { year ->
+                            asset.copy(saleYear = year)
+                        } ?: asset
+                    } else {
+                        asset
+                    }
+                },
             )
         }
         calculate()
@@ -324,12 +347,19 @@ class SimulationViewModel(
             )
 
             val realEstates = state.assets.filterIsInstance<Asset.RealEstate>()
-            val relocationPlan = state.relocationPlan.takeIf { it.isConfigured(realEstates) }
-            val projection = engine.project(
-                baseInput.copy(relocationPlan = relocationPlan),
-            )
-            val baselineProjection = if (relocationPlan != null) {
-                engine.project(baseInput)
+            val timingReport = RealEstateTimingAdvisoryEngine.evaluate(realEstates, startYear)
+            val projection = engine.project(baseInput)
+            val baselineProjection = if (timingReport.suggestedSaleYears.isNotEmpty()) {
+                val altAssets = state.assets.map { asset ->
+                    if (asset is Asset.RealEstate) {
+                        timingReport.suggestedSaleYears[asset.id]?.let { year ->
+                            asset.copy(saleYear = year)
+                        } ?: asset
+                    } else {
+                        asset
+                    }
+                }.filter { it.hasValue() }
+                engine.project(baseInput.copy(assets = altAssets))
             } else {
                 null
             }

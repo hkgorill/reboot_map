@@ -53,6 +53,7 @@ object RealEstatePersistence {
             holdingYears = persisted.realEstateHoldingYears,
             category = category,
             isPrimaryResidence = category == RealEstateCategory.PRIMARY_RESIDENCE,
+            acquisitionYear = null,
             saleYear = persisted.realEstateSaleYear,
             expectedSalePrice = persisted.realEstateExpectedSalePrice,
         )

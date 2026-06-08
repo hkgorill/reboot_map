@@ -202,11 +202,28 @@ fun AssetCardFields(
             }
             val currentYear = Year.now().value
             IntInputField(
+                label = "취득 연도",
+                value = asset.acquisitionYear ?: 0,
+                validRange = (currentYear - 50)..(currentYear + 30),
+                onValueChange = { year ->
+                    val acq = year.takeIf { it in (currentYear - 50)..(currentYear + 30) && it != 0 }
+                    val updated = when {
+                        acq != null && asset.saleYear != null && acq > asset.saleYear ->
+                            asset.copy(acquisitionYear = acq, saleYear = null, expectedSalePrice = 0L)
+                        else -> asset.copy(acquisitionYear = acq)
+                    }
+                    onAssetChange(updated)
+                },
+                supportingText = "비우면 시뮬 시작(현재)부터 보유 · 미래 연도면 해당 해 매수",
+            )
+            IntInputField(
                 label = "매각 예정 연도",
                 value = asset.saleYear ?: 0,
                 validRange = currentYear..(currentYear + 50),
                 onValueChange = { year ->
                     val saleYear = year.takeIf { it > currentYear }
+                    val acq = asset.acquisitionYear
+                    if (saleYear != null && acq != null && acq > saleYear) return@IntInputField
                     onAssetChange(
                         asset.copy(
                             saleYear = saleYear,

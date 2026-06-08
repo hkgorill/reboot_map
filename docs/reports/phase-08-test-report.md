@@ -11,7 +11,7 @@
 
 | 구분 | 결과 | 비고 |
 |------|------|------|
-| 자체 테스트 (단위) | **PASS** | 121건 (`.\gradlew.bat :app:testDebugUnitTest`) |
+| 자체 테스트 (단위) | **PASS** | 121건 (Phase 9 기준 **136건**) (`.\gradlew.bat :app:testDebugUnitTest`) |
 | Phase 8 코드 | **구현 완료** | PersonalLoan·엔진·UI·DataStore v5 |
 | 실기기 검증 | **⏳ 대기** | 아래 체크리스트 참고 |
 

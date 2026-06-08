@@ -286,7 +286,7 @@ private fun TimingChip(
     )
 }
 
-private fun relocationCardSummary(
+internal fun relocationCardSummary(
     plan: RelocationPlan,
     estates: List<Asset.RealEstate>,
 ): String = when {

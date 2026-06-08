@@ -30,20 +30,20 @@ class RelocationPlanTest {
                 saleYear = baseYear + 2,
             ),
         )
-        val plan = RelocationPlan(
-            enabled = true,
-            newHomeValue = 400_000_000L,
-            newHomeDebt = 0L,
-            purchaseTiming = PurchaseTiming.BeforeSale(1),
+        val newHome = Asset.RealEstate(
+            id = "real_estate_2",
+            currentValue = 400_000_000L,
+            acquisitionYear = baseYear + 1,
+            saleYear = null,
+            isPrimaryResidence = true,
         )
 
-        val withRelocation = engine.project(
+        val withSecondHome = engine.project(
             SimulationInput(
                 profile = profile,
                 assumptions = EconomicAssumptions(),
-                assets = assets,
+                assets = assets + newHome,
                 startYear = baseYear,
-                relocationPlan = plan,
             ),
         )
         val baseline = engine.project(
@@ -55,7 +55,7 @@ class RelocationPlanTest {
             ),
         )
 
-        val relocatedSale = withRelocation.yearlySnapshots.first { it.year == baseYear + 2 }
+        val relocatedSale = withSecondHome.yearlySnapshots.first { it.year == baseYear + 2 }
         val baselineSale = baseline.yearlySnapshots.first { it.year == baseYear + 2 }
         assertTrue(relocatedSale.endingBalance < baselineSale.endingBalance)
     }
@@ -77,40 +77,32 @@ class RelocationPlanTest {
                 saleYear = baseYear + 2,
             ),
         )
-        val twoHomePlan = RelocationPlan(
-            enabled = true,
-            newHomeValue = 400_000_000L,
-            newHomeDebt = 0L,
-            purchaseTiming = PurchaseTiming.BeforeSale(1),
-        )
-        val exemptPlan = RelocationPlan(
-            enabled = true,
-            newHomeValue = 400_000_000L,
-            newHomeDebt = 0L,
-            purchaseTiming = PurchaseTiming.AfterSale(1),
+        val secondHome = Asset.RealEstate(
+            id = "real_estate_2",
+            currentValue = 400_000_000L,
+            saleYear = null,
+            isPrimaryResidence = true,
         )
 
         val twoHome = engine.project(
             SimulationInput(
                 profile = profile,
                 assumptions = EconomicAssumptions(),
-                assets = assets,
+                assets = assets + secondHome,
                 startYear = baseYear,
-                relocationPlan = twoHomePlan,
             ),
         )
-        val afterSale = engine.project(
+        val singleHome = engine.project(
             SimulationInput(
                 profile = profile,
                 assumptions = EconomicAssumptions(),
                 assets = assets,
                 startYear = baseYear,
-                relocationPlan = exemptPlan,
             ),
         )
 
-        val twoHomeTax = twoHome.yearlySnapshots.first { it.year == baseYear + 2 }.annualTax
-        val afterSaleTax = afterSale.yearlySnapshots.first { it.year == baseYear + 2 }.annualTax
-        assertTrue(twoHomeTax > afterSaleTax)
+        val twoHomeCgt = twoHome.yearlySnapshots.first { it.year == baseYear + 2 }.taxBreakdown.capitalGainsTax
+        val afterSaleCgt = singleHome.yearlySnapshots.first { it.year == baseYear + 2 }.taxBreakdown.capitalGainsTax
+        assertTrue(twoHomeCgt > afterSaleCgt)
     }
 }

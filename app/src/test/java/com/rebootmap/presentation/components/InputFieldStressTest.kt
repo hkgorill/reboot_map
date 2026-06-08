@@ -177,8 +177,18 @@ class InputFieldStressTest {
                         asset.copy(holdingYears = candidate)
                     }
                     asset.copy(holdingYears = coerceIntPreservingZero(candidate, 0..50))
+                    val acqRange = (currentYear - 50)..(currentYear + 30)
+                    if (isIntInputAllowed(candidate, acqRange)) {
+                        val acq = candidate.takeIf { it != 0 }
+                        if (acq == null || asset.saleYear == null || acq <= asset.saleYear) {
+                            asset.copy(acquisitionYear = acq)
+                        }
+                    }
                     if (isIntInputAllowed(candidate, currentYear..(currentYear + 50))) {
-                        asset.copy(saleYear = candidate.takeIf { it > currentYear })
+                        val sale = candidate.takeIf { it > currentYear }
+                        if (sale == null || asset.acquisitionYear == null || asset.acquisitionYear <= sale) {
+                            asset.copy(saleYear = sale)
+                        }
                     }
                 }
                 is Asset.NationalPension -> {

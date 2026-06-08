@@ -27,12 +27,17 @@ sealed class Asset {
         val category: RealEstateCategory = RealEstateCategory.PRIMARY_RESIDENCE,
         /** 양도세 1세대1주택 — [category]가 주거용이면 true 유지 */
         val isPrimaryResidence: Boolean = true,
+        /** 취득(매수) 연도. null이면 시뮬 시작 시점부터 보유 */
+        val acquisitionYear: Int? = null,
         val saleYear: Int?,
         /** 매각 예정 연도 시세(총 자산가치). 0이면 현재 시세 유지 */
         val expectedSalePrice: Long = 0L,
     ) : Asset() {
         init {
             require(currentValue >= 0) { "부동산 시세는 0 이상이어야 합니다." }
+            if (acquisitionYear != null && saleYear != null) {
+                require(acquisitionYear <= saleYear) { "취득 연도는 매각 연도 이전이어야 합니다." }
+            }
             require(debtAmount >= 0) { "부채 금액은 0 이상이어야 합니다." }
             require(acquisitionCost >= 0) { "취득가액은 0 이상이어야 합니다." }
             require(holdingYears in 0..50) { "보유 연수가 유효하지 않습니다." }

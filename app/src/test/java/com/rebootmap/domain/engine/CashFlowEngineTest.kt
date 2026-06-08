@@ -719,7 +719,8 @@ class CashFlowEngineTest {
         val saleYear = result.yearlySnapshots.first { it.year == baseYear + 1 }
 
         assertEquals(500_000_000L, saleYear.annualIncome)
-        assertEquals(0L, saleYear.annualTax)
+        assertEquals(0L, saleYear.taxBreakdown.capitalGainsTax)
+        assertTrue(saleYear.taxBreakdown.brokerageFee > 0L)
     }
 
     @Test

@@ -30,7 +30,16 @@ data class YearSnapshot(
     val personalLoanBalance: Long = 0L,
     /** 해당 연도 대출 원리금 상환액 */
     val annualLoanRepayment: Long = 0L,
-)
+) {
+    /** 양도세 등 일시 소득에 딸린 세금을 제외한 연간 세금·부과 부담 */
+    val recurringAnnualTaxBurden: Long
+        get() = (taxBreakdown.totalTax - taxBreakdown.capitalGainsTax) +
+            annualHoldingCost.total + annualLoanRepayment
+
+    /** 일시 유입을 제외한 연간 순현금 — 월표 「월 순현금」에 사용 */
+    val recurringNetCashFlow: Long
+        get() = incomeBreakdown.recurringTotal - annualLivingExpense - recurringAnnualTaxBurden
+}
 
 data class CashFlowProjection(
     val yearlySnapshots: List<YearSnapshot>,

@@ -20,7 +20,7 @@ class Phase7RelocationTest {
     private val baseYear = 2026
 
     @Test
-    fun `P7-T01 - linked buy estate excluded from holding until purchase year`() {
+    fun `P7-T01 - 취득 연도 전에는 신규 주택이 보유·2주택에 포함되지 않는다`() {
         val profile = UserProfile(currentAge = 50, retirementAge = 60, lifeExpectancy = 54, monthlyLivingExpense = 0L)
         val sell = Asset.RealEstate(
             id = "real_estate_1",
@@ -31,14 +31,9 @@ class Phase7RelocationTest {
         val buy = Asset.RealEstate(
             id = "real_estate_2",
             currentValue = 300_000_000L,
+            acquisitionYear = baseYear + 2,
             saleYear = null,
             category = RealEstateCategory.PRIMARY_RESIDENCE,
-        )
-        val plan = RelocationPlan(
-            enabled = true,
-            sellEstateId = sell.id,
-            buyEstateId = buy.id,
-            purchaseTiming = PurchaseTiming.BeforeSale(1),
         )
         val projection = engine.project(
             SimulationInput(
@@ -46,7 +41,6 @@ class Phase7RelocationTest {
                 assumptions = EconomicAssumptions(),
                 assets = listOf(sell, buy),
                 startYear = baseYear,
-                relocationPlan = plan,
             ),
         )
         val beforeTwoHome = projection.yearlySnapshots.first { it.year == baseYear + 1 }
@@ -57,7 +51,7 @@ class Phase7RelocationTest {
     }
 
     @Test
-    fun `P7-T02 - relocation flags mark gap period after sale`() {
+    fun `P7-T02 - 매각 후 취득 전 무주택 구간 플래그`() {
         val profile = UserProfile(currentAge = 50, retirementAge = 60, lifeExpectancy = 54, monthlyLivingExpense = 0L)
         val sell = Asset.RealEstate(
             id = "real_estate_1",
@@ -65,19 +59,19 @@ class Phase7RelocationTest {
             saleYear = baseYear + 1,
             category = RealEstateCategory.PRIMARY_RESIDENCE,
         )
-        val plan = RelocationPlan(
-            enabled = true,
-            sellEstateId = sell.id,
-            newHomeValue = 200_000_000L,
-            purchaseTiming = PurchaseTiming.AfterSale(2),
+        val futureBuy = Asset.RealEstate(
+            id = "real_estate_2",
+            currentValue = 200_000_000L,
+            acquisitionYear = baseYear + 3,
+            saleYear = null,
+            category = RealEstateCategory.PRIMARY_RESIDENCE,
         )
         val projection = engine.project(
             SimulationInput(
                 profile = profile,
                 assumptions = EconomicAssumptions(),
-                assets = listOf(sell),
+                assets = listOf(sell, futureBuy),
                 startYear = baseYear,
-                relocationPlan = plan,
             ),
         )
         val gapYear = projection.yearlySnapshots.first { it.year == baseYear + 2 }

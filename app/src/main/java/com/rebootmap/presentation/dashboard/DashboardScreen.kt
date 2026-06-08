@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AccountBalance
 import androidx.compose.material.icons.outlined.CreditCard
@@ -23,6 +22,8 @@ import androidx.compose.material.icons.outlined.TrendingUp
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Work
 import androidx.compose.material.icons.outlined.Store
+import androidx.compose.material.icons.outlined.Event
+import androidx.compose.material.icons.outlined.Insights
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -42,6 +43,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import java.time.Year
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -55,6 +57,9 @@ import com.rebootmap.domain.model.RealEstateDefaults
 import com.rebootmap.presentation.chart.CashFlowChartCard
 import com.rebootmap.presentation.components.ExitConfirmBackHandler
 import com.rebootmap.presentation.components.ExpandableCard
+import com.rebootmap.presentation.dashboard.DashboardGroupCard
+import com.rebootmap.presentation.dashboard.DashboardGroupId
+import com.rebootmap.presentation.dashboard.DashboardGroupSummaries
 import com.rebootmap.presentation.components.ResetInputsConfirmDialog
 import com.rebootmap.presentation.components.IntInputField
 import com.rebootmap.presentation.components.coercePercentPreservingZero
@@ -64,9 +69,12 @@ import com.rebootmap.presentation.simulation.AssetCardFields
 import com.rebootmap.presentation.simulation.MilestoneTimelineCard
 import com.rebootmap.presentation.simulation.PresetHints
 import com.rebootmap.presentation.simulation.PersonalLoanCardFields
-import com.rebootmap.presentation.simulation.RelocationScenarioCard
+import com.rebootmap.domain.portfolio.RealEstateTimingAdvisoryEngine
+import com.rebootmap.presentation.simulation.RealEstateTimingConsultCard
 import com.rebootmap.presentation.simulation.displayTitle
 import com.rebootmap.presentation.simulation.summaryText
+import com.rebootmap.domain.advisory.AssetAdvisoryEngine
+import com.rebootmap.presentation.simulation.AssetAdvisoryCard
 import com.rebootmap.presentation.simulation.MonthlyCashFlowSummaryCard
 import com.rebootmap.presentation.simulation.ResultSummaryCard
 import com.rebootmap.presentation.guide.UserGuideDialog
@@ -98,6 +106,30 @@ fun DashboardScreen(viewModel: SimulationViewModel) {
 
     if (showUserGuide) {
         UserGuideDialog(onDismiss = { showUserGuide = false })
+    }
+
+    val advisoryReport = remember(
+        state.projection,
+        state.profile,
+        state.assets,
+        state.personalLoans,
+    ) {
+        state.projection?.let { projection ->
+            AssetAdvisoryEngine.evaluate(
+                projection = projection,
+                profile = state.profile,
+                assets = state.assets,
+                personalLoans = state.personalLoans,
+            )
+        }
+    }
+
+    val realEstatesForTiming = state.assets.filterIsInstance<Asset.RealEstate>()
+    val timingReport = remember(realEstatesForTiming) {
+        RealEstateTimingAdvisoryEngine.evaluate(realEstatesForTiming, Year.now().value)
+    }
+    val timingTaxEstimate = remember(realEstatesForTiming) {
+        RealEstateTimingAdvisoryEngine.estimateTransactionTaxWon(realEstatesForTiming, Year.now().value)
     }
 
     Scaffold(
@@ -156,62 +188,69 @@ fun DashboardScreen(viewModel: SimulationViewModel) {
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            val realEstates = state.assets.filterIsInstance<Asset.RealEstate>()
+            val nonRealEstateAssets = state.assets.filter { it !is Asset.RealEstate }
+            val personalLoans = state.personalLoans
+            val expandedGroups = state.expandedDashboardGroups
+
             state.projection?.let { projection ->
                 item {
-                    ResultSummaryCard(
-                        projection = projection,
-                        retirementAge = state.profile.retirementAge,
-                    )
+                    DashboardGroupCard(
+                        title = "시뮬레이션 결과",
+                        icon = Icons.Outlined.Insights,
+                        summary = DashboardGroupSummaries.results(state, advisoryReport),
+                        expanded = DashboardGroupId.RESULTS in expandedGroups,
+                        onToggle = { viewModel.toggleDashboardGroup(DashboardGroupId.RESULTS) },
+                    ) {
+                        ResultSummaryCard(
+                            projection = projection,
+                            retirementAge = state.profile.retirementAge,
+                        )
+                        advisoryReport?.let { report ->
+                            AssetAdvisoryCard(report = report)
+                        }
+                        MonthlyCashFlowSummaryCard(
+                            projection = projection,
+                            profile = state.profile,
+                            assets = state.assets,
+                        )
+                        CashFlowChartCard(
+                            projection = projection,
+                            retirementAge = state.profile.retirementAge,
+                            baselineProjection = state.baselineProjection.takeIf { state.showComparison },
+                        )
+                    }
                 }
+            }
 
-                item {
-                    MonthlyCashFlowSummaryCard(
-                        projection = projection,
-                        retirementAge = state.profile.retirementAge,
-                    )
-                }
-
-                item {
-                    CashFlowChartCard(
-                        projection = projection,
-                        retirementAge = state.profile.retirementAge,
-                        baselineProjection = state.baselineProjection.takeIf { state.showComparison },
+            item {
+                DashboardGroupCard(
+                    title = "생활·주거 계획",
+                    icon = Icons.Outlined.Event,
+                    summary = DashboardGroupSummaries.lifeHousing(state),
+                    expanded = DashboardGroupId.LIFE_HOUSING in expandedGroups,
+                    onToggle = { viewModel.toggleDashboardGroup(DashboardGroupId.LIFE_HOUSING) },
+                ) {
+                    MilestoneTimelineCard(
+                        expenses = state.lumpSumExpenses,
+                        expenseMatches = state.expenseMatches,
+                        currentAge = state.profile.currentAge,
+                        expanded = state.isMilestoneExpanded,
+                        onToggle = viewModel::toggleMilestoneExpanded,
+                        onAdd = viewModel::addLumpSumExpense,
+                        onUpdate = viewModel::updateLumpSumExpense,
+                        onRemove = viewModel::removeLumpSumExpense,
                     )
                 }
             }
 
             item {
-                MilestoneTimelineCard(
-                    expenses = state.lumpSumExpenses,
-                    expenseMatches = state.expenseMatches,
-                    currentAge = state.profile.currentAge,
-                    expanded = state.isMilestoneExpanded,
-                    onToggle = viewModel::toggleMilestoneExpanded,
-                    onAdd = viewModel::addLumpSumExpense,
-                    onUpdate = viewModel::updateLumpSumExpense,
-                    onRemove = viewModel::removeLumpSumExpense,
-                )
-            }
-
-            item {
-                val estates = state.assets.filterIsInstance<Asset.RealEstate>()
-                RelocationScenarioCard(
-                    plan = state.relocationPlan,
-                    realEstates = estates,
-                    expanded = state.isRelocationExpanded,
-                    onToggle = viewModel::toggleRelocationExpanded,
-                    onPlanChange = viewModel::updateRelocationPlan,
-                    onAddBuyEstate = viewModel::addBuyEstateForRelocation,
-                )
-            }
-
-            item {
-                ExpandableCard(
+                DashboardGroupCard(
                     title = "기본 정보",
-                    summary = "${state.profile.currentAge}세 → ${state.profile.retirementAge}세 은퇴 · 월 ${state.profile.monthlyLivingExpense / 10_000}만원",
                     icon = Icons.Outlined.Payments,
-                    expanded = state.isBasicInfoExpanded,
-                    onToggle = viewModel::toggleBasicInfoExpanded,
+                    summary = DashboardGroupSummaries.basicInfo(state),
+                    expanded = DashboardGroupId.BASIC_INFO in expandedGroups,
+                    onToggle = { viewModel.toggleDashboardGroup(DashboardGroupId.BASIC_INFO) },
                 ) {
                     IntInputField(
                         label = "현재 나이",
@@ -293,105 +332,124 @@ fun DashboardScreen(viewModel: SimulationViewModel) {
                 }
             }
 
-            val realEstates = state.assets.filterIsInstance<Asset.RealEstate>()
-            val nonRealEstateAssets = state.assets.filter { it !is Asset.RealEstate }
+            item {
+                DashboardGroupCard(
+                    title = "부동산",
+                    icon = Icons.Outlined.Home,
+                    summary = DashboardGroupSummaries.realEstate(state, timingReport),
+                    expanded = DashboardGroupId.REAL_ESTATE in expandedGroups,
+                    onToggle = { viewModel.toggleDashboardGroup(DashboardGroupId.REAL_ESTATE) },
+                ) {
+                    RealEstateTimingConsultCard(
+                        estates = realEstates,
+                        report = timingReport,
+                        expanded = state.isTimingConsultExpanded,
+                        onToggle = viewModel::toggleTimingConsultExpanded,
+                        onSaleYearChange = viewModel::updateEstateSaleYear,
+                        onApplySuggestions = viewModel::applyTimingSuggestions,
+                        estimatedTaxWon = timingTaxEstimate,
+                    )
+                    if (realEstates.size < RealEstateDefaults.MAX_COUNT) {
+                        OutlinedButton(
+                            onClick = viewModel::addRealEstate,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text("+ 부동산 추가 (최대 ${RealEstateDefaults.MAX_COUNT}건)")
+                        }
+                    }
+                    realEstates.forEach { estate ->
+                        val referenceAsset = state.referencePreset?.assets?.find { it.id == estate.id }
+                            ?: if (realEstates.size == 1) {
+                                state.referencePreset?.assets?.filterIsInstance<Asset.RealEstate>()?.firstOrNull()
+                            } else {
+                                null
+                            }
+                        val estateOrdinal = realEstates.indexOfFirst { it.id == estate.id }
+                        val canRemoveEstate = realEstates.size > 1 || estate.currentValue > 0 || estate.debtAmount > 0
+                        ExpandableCard(
+                            title = estate.displayTitle(estateOrdinal, realEstates.size),
+                            summary = estate.summaryText(),
+                            icon = estate.icon(),
+                            expanded = estate.id in state.expandedAssetIds,
+                            onToggle = { viewModel.toggleAssetExpanded(estate.id) },
+                        ) {
+                            AssetCardFields(
+                                asset = estate,
+                                referenceAsset = referenceAsset,
+                                onAssetChange = { updated -> viewModel.updateAssetById(estate.id, updated) },
+                                onRemove = if (canRemoveEstate) {
+                                    { viewModel.removeRealEstate(estate.id) }
+                                } else {
+                                    null
+                                },
+                            )
+                        }
+                    }
+                }
+            }
 
             item {
-                if (realEstates.size < RealEstateDefaults.MAX_COUNT) {
-                    OutlinedButton(
-                        onClick = viewModel::addRealEstate,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text("+ 부동산 추가 (최대 ${RealEstateDefaults.MAX_COUNT}건)")
+                DashboardGroupCard(
+                    title = "연금·수입·투자",
+                    icon = Icons.Outlined.AccountBalance,
+                    summary = DashboardGroupSummaries.incomePension(state),
+                    expanded = DashboardGroupId.INCOME_PENSION in expandedGroups,
+                    onToggle = { viewModel.toggleDashboardGroup(DashboardGroupId.INCOME_PENSION) },
+                ) {
+                    nonRealEstateAssets.forEach { asset ->
+                        val referenceAsset = state.referencePreset?.assets?.find { it.id == asset.id }
+                        ExpandableCard(
+                            title = asset.displayTitle(),
+                            summary = asset.summaryText(),
+                            icon = asset.icon(),
+                            expanded = asset.id in state.expandedAssetIds,
+                            onToggle = { viewModel.toggleAssetExpanded(asset.id) },
+                        ) {
+                            AssetCardFields(
+                                asset = asset,
+                                referenceAsset = referenceAsset,
+                                onAssetChange = { updated -> viewModel.updateAssetById(asset.id, updated) },
+                                onRemove = null,
+                            )
+                        }
                     }
                 }
             }
-
-            itemsIndexed(
-                items = realEstates,
-                key = { _, estate -> estate.id },
-            ) { _, estate ->
-                val referenceAsset = state.referencePreset?.assets?.find { it.id == estate.id }
-                    ?: if (realEstates.size == 1) {
-                        state.referencePreset?.assets?.filterIsInstance<Asset.RealEstate>()?.firstOrNull()
-                    } else {
-                        null
-                    }
-                val estateOrdinal = realEstates.indexOfFirst { it.id == estate.id }
-                val canRemoveEstate = realEstates.size > 1 || estate.currentValue > 0 || estate.debtAmount > 0
-                ExpandableCard(
-                    title = estate.displayTitle(estateOrdinal, realEstates.size),
-                    summary = estate.summaryText(),
-                    icon = estate.icon(),
-                    expanded = estate.id in state.expandedAssetIds,
-                    onToggle = { viewModel.toggleAssetExpanded(estate.id) },
-                ) {
-                    AssetCardFields(
-                        asset = estate,
-                        referenceAsset = referenceAsset,
-                        onAssetChange = { updated -> viewModel.updateAssetById(estate.id, updated) },
-                        onRemove = if (canRemoveEstate) {
-                            { viewModel.removeRealEstate(estate.id) }
-                        } else {
-                            null
-                        },
-                    )
-                }
-            }
-
-            itemsIndexed(
-                items = nonRealEstateAssets,
-                key = { _, asset -> asset.id },
-            ) { _, asset ->
-                val referenceAsset = state.referencePreset?.assets?.find { it.id == asset.id }
-                ExpandableCard(
-                    title = asset.displayTitle(),
-                    summary = asset.summaryText(),
-                    icon = asset.icon(),
-                    expanded = asset.id in state.expandedAssetIds,
-                    onToggle = { viewModel.toggleAssetExpanded(asset.id) },
-                ) {
-                    AssetCardFields(
-                        asset = asset,
-                        referenceAsset = referenceAsset,
-                        onAssetChange = { updated -> viewModel.updateAssetById(asset.id, updated) },
-                        onRemove = null,
-                    )
-                }
-            }
-
-            val personalLoans = state.personalLoans
 
             item {
-                if (personalLoans.size < PersonalLoanDefaults.MAX_COUNT) {
-                    OutlinedButton(
-                        onClick = viewModel::addPersonalLoan,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text("+ 신용·차용 부채 추가 (최대 ${PersonalLoanDefaults.MAX_COUNT}건)")
-                    }
-                }
-            }
-
-            itemsIndexed(
-                items = personalLoans,
-                key = { _, loan -> loan.id },
-            ) { _, loan ->
-                val loanOrdinal = personalLoans.indexOfFirst { it.id == loan.id }
-                ExpandableCard(
-                    title = loan.displayTitle(loanOrdinal, personalLoans.size),
-                    summary = loan.summaryText(),
+                DashboardGroupCard(
+                    title = "부채",
                     icon = Icons.Outlined.CreditCard,
-                    expanded = loan.id in state.expandedLoanIds,
-                    onToggle = { viewModel.toggleLoanExpanded(loan.id) },
+                    summary = DashboardGroupSummaries.debt(state),
+                    expanded = DashboardGroupId.DEBT in expandedGroups,
+                    onToggle = { viewModel.toggleDashboardGroup(DashboardGroupId.DEBT) },
                 ) {
-                    PersonalLoanCardFields(
-                        loan = loan,
-                        loanOrdinal = loanOrdinal,
-                        loanCount = personalLoans.size,
-                        onLoanChange = viewModel::updatePersonalLoan,
-                        onRemove = { viewModel.removePersonalLoan(loan.id) },
-                    )
+                    if (personalLoans.size < PersonalLoanDefaults.MAX_COUNT) {
+                        OutlinedButton(
+                            onClick = viewModel::addPersonalLoan,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text("+ 신용·차용 부채 추가 (최대 ${PersonalLoanDefaults.MAX_COUNT}건)")
+                        }
+                    }
+                    personalLoans.forEach { loan ->
+                        val loanOrdinal = personalLoans.indexOfFirst { it.id == loan.id }
+                        ExpandableCard(
+                            title = loan.displayTitle(loanOrdinal, personalLoans.size),
+                            summary = loan.summaryText(),
+                            icon = Icons.Outlined.CreditCard,
+                            expanded = loan.id in state.expandedLoanIds,
+                            onToggle = { viewModel.toggleLoanExpanded(loan.id) },
+                        ) {
+                            PersonalLoanCardFields(
+                                loan = loan,
+                                loanOrdinal = loanOrdinal,
+                                loanCount = personalLoans.size,
+                                onLoanChange = viewModel::updatePersonalLoan,
+                                onRemove = { viewModel.removePersonalLoan(loan.id) },
+                            )
+                        }
+                    }
                 }
             }
         }
