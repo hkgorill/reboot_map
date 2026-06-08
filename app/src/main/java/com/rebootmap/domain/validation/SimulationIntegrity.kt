@@ -43,8 +43,11 @@ object SimulationIntegrity {
                 add(issue(IntegrityLevel.ERROR, "profile.lifeExpectancy", "기대 수명은 현재 나이 이상이어야 합니다."))
             }
         }
+        if (profile.currentMonthlyLivingExpense < 0) {
+            add(issue(IntegrityLevel.ERROR, "profile.currentMonthlyLivingExpense", "현재 월 생활비는 0 이상이어야 합니다."))
+        }
         if (profile.monthlyLivingExpense < 0) {
-            add(issue(IntegrityLevel.ERROR, "profile.monthlyLivingExpense", "월 생활비는 0 이상이어야 합니다."))
+            add(issue(IntegrityLevel.ERROR, "profile.monthlyLivingExpense", "목표 월 생활비는 0 이상이어야 합니다."))
         }
     }
 

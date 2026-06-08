@@ -11,6 +11,7 @@ import com.rebootmap.domain.matching.AssetMatchingEngine
 import com.rebootmap.domain.milestone.LumpSumExpense
 import com.rebootmap.domain.model.Asset
 import com.rebootmap.domain.model.EconomicAssumptions
+import com.rebootmap.domain.model.LivingExpenseInflationBase
 import com.rebootmap.domain.model.PersonalLoan
 import com.rebootmap.domain.model.PersonalLoanDefaults
 import com.rebootmap.domain.model.RealEstateDefaults
@@ -107,6 +108,11 @@ class SimulationViewModel(
 
     fun updateAssumptions(assumptions: EconomicAssumptions) {
         _uiState.update { it.copy(assumptions = assumptions) }
+        calculate()
+    }
+
+    fun updateLivingExpenseInflationBase(base: LivingExpenseInflationBase) {
+        _uiState.update { it.copy(assumptions = it.assumptions.copy(livingExpenseInflationBase = base)) }
         calculate()
     }
 
@@ -230,10 +236,6 @@ class SimulationViewModel(
             if (group in expanded) expanded.remove(group) else expanded.add(group)
             state.copy(expandedDashboardGroups = expanded)
         }
-    }
-
-    fun toggleMilestoneExpanded() {
-        _uiState.update { it.copy(isMilestoneExpanded = !it.isMilestoneExpanded) }
     }
 
     fun addLumpSumExpense(expense: LumpSumExpense) {

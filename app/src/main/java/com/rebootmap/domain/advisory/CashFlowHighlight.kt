@@ -76,4 +76,24 @@ object CashFlowHighlightPlanner {
         projection: CashFlowProjection,
         retirementAge: Int,
     ): List<YearSnapshot> = projection.yearlySnapshots.filter { it.age >= retirementAge }
+
+    fun preRetirementSnapshots(
+        projection: CashFlowProjection,
+        retirementAge: Int,
+    ): List<YearSnapshot> = projection.yearlySnapshots.filter { it.age < retirementAge }
+
+    /** 요약(전환 시점)에 이미 표시된 연도를 제외한 나머지 — 은퇴 전·후 모두 포함 */
+    fun yearlyDetailSnapshots(
+        projection: CashFlowProjection,
+        excludedAges: Set<Int>,
+    ): List<YearSnapshot> = projection.yearlySnapshots.filter { it.age !in excludedAges }
+
+    fun yearlyDetailSnapshots(
+        projection: CashFlowProjection,
+        profile: UserProfile,
+        assets: List<Asset> = emptyList(),
+    ): List<YearSnapshot> {
+        val excluded = highlights(projection, profile, assets).map { it.snapshot.age }.toSet()
+        return yearlyDetailSnapshots(projection, excluded)
+    }
 }

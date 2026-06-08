@@ -27,8 +27,10 @@ import androidx.compose.material.icons.outlined.Insights
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -235,8 +237,6 @@ fun DashboardScreen(viewModel: SimulationViewModel) {
                         expenses = state.lumpSumExpenses,
                         expenseMatches = state.expenseMatches,
                         currentAge = state.profile.currentAge,
-                        expanded = state.isMilestoneExpanded,
-                        onToggle = viewModel::toggleMilestoneExpanded,
                         onAdd = viewModel::addLumpSumExpense,
                         onUpdate = viewModel::updateLumpSumExpense,
                         onRemove = viewModel::removeLumpSumExpense,
@@ -291,11 +291,22 @@ fun DashboardScreen(viewModel: SimulationViewModel) {
                         },
                     )
                     ManWonInputField(
-                        label = "목표 월 생활비",
+                        label = "현재 월 생활비",
+                        valueInWon = state.profile.currentMonthlyLivingExpense,
+                        onValueChange = { amount ->
+                            viewModel.updateProfile(
+                                state.profile.copy(currentMonthlyLivingExpense = amount),
+                            )
+                        },
+                        supportingText = "은퇴 전까지 매년 차감 (물가상승률은 시뮬 시작부터 누적)",
+                    )
+                    ManWonInputField(
+                        label = "목표 월 생활비 (은퇴 후)",
                         valueInWon = state.profile.monthlyLivingExpense,
                         onValueChange = { amount ->
                             viewModel.updateProfile(state.profile.copy(monthlyLivingExpense = amount))
                         },
+                        supportingText = "은퇴 연령부터 적용 · 물가 기준은 아래에서 선택",
                     )
                     PercentInputField(
                         label = "물가상승률 (%)",
@@ -319,11 +330,7 @@ fun DashboardScreen(viewModel: SimulationViewModel) {
                     )
                     LivingExpenseInflationBaseSelector(
                         selected = state.assumptions.livingExpenseInflationBase,
-                        onSelect = { base ->
-                            viewModel.updateAssumptions(
-                                state.assumptions.copy(livingExpenseInflationBase = base),
-                            )
-                        },
+                        onSelect = viewModel::updateLivingExpenseInflationBase,
                     )
                     TaxAssumptionSection(
                         assumptions = state.assumptions,
@@ -456,11 +463,17 @@ fun DashboardScreen(viewModel: SimulationViewModel) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun LivingExpenseInflationBaseSelector(
     selected: LivingExpenseInflationBase,
     onSelect: (LivingExpenseInflationBase) -> Unit,
 ) {
+    val options = listOf(
+        LivingExpenseInflationBase.SIMULATION_START to "현재부터",
+        LivingExpenseInflationBase.RETIREMENT_AGE to "은퇴 시점",
+    )
+
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -474,21 +487,30 @@ private fun LivingExpenseInflationBaseSelector(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            FilterChip(
-                selected = selected == LivingExpenseInflationBase.RETIREMENT_AGE,
-                onClick = { onSelect(LivingExpenseInflationBase.RETIREMENT_AGE) },
-                label = { Text("은퇴 시점") },
-            )
-            FilterChip(
-                selected = selected == LivingExpenseInflationBase.SIMULATION_START,
-                onClick = { onSelect(LivingExpenseInflationBase.SIMULATION_START) },
-                label = { Text("현재부터") },
-            )
+        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+            options.forEachIndexed { index, (base, label) ->
+                SegmentedButton(
+                    selected = selected == base,
+                    onClick = { onSelect(base) },
+                    shape = SegmentedButtonDefaults.itemShape(
+                        index = index,
+                        count = options.size,
+                    ),
+                ) {
+                    Text(label)
+                }
+            }
         }
+        Text(
+            text = when (selected) {
+                LivingExpenseInflationBase.SIMULATION_START ->
+                    "선택됨: 시뮬레이션 시작(현재)부터 물가를 누적합니다."
+                LivingExpenseInflationBase.RETIREMENT_AGE ->
+                    "선택됨: 은퇴 직후 월 생활비를 기준(0년)으로 물가를 누적합니다."
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.primary,
+        )
     }
 }
 

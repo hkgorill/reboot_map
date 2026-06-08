@@ -70,14 +70,15 @@ class UserScenario48Test {
     }
 
     @Test
-    fun `시나리오 — 은퇴 65세로 맞추면 65세 전 생활비 0, 65세에도 연금 합산은 300만 미만`() {
+    fun `시나리오 — 은퇴 65세일 때 64세에도 현재 생활비 차감, 65세부터 목표 생활비`() {
         val result = project(retirementAge = 65)
         val age64 = snapshotAt(result.yearlySnapshots, 64)
         val age65 = snapshotAt(result.yearlySnapshots, 65)
 
-        assertEquals(0L, age64.annualLivingExpense)
+        val age55 = snapshotAt(result.yearlySnapshots, 55)
+        assertTrue(age64.annualLivingExpense > 0)
         assertTrue(age65.annualLivingExpense > 0)
-        assertTrue(age65.annualIncome > age65.annualLivingExpense)
+        assertTrue(age55.annualIncome > age55.annualLivingExpense)
     }
 
     private fun project(retirementAge: Int) = engine.project(
@@ -86,6 +87,7 @@ class UserScenario48Test {
                 currentAge = 48,
                 retirementAge = retirementAge,
                 lifeExpectancy = 90,
+                currentMonthlyLivingExpense = 3_000_000L,
                 monthlyLivingExpense = 3_000_000L,
             ),
             assumptions = EconomicAssumptions(inflationRate = 0.02),

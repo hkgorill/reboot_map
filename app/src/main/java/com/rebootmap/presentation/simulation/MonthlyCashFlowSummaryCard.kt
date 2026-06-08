@@ -51,13 +51,18 @@ fun MonthlyCashFlowSummaryCard(
     val highlightRows = remember(projection, profile, assets) {
         CashFlowHighlightPlanner.highlights(projection, profile, assets)
     }
-    val postRetirement = remember(projection, profile.retirementAge) {
-        CashFlowHighlightPlanner.postRetirementSnapshots(projection, profile.retirementAge)
+    val highlightAges = remember(highlightRows) { highlightRows.map { it.snapshot.age }.toSet() }
+    val yearlyDetails = remember(projection, highlightAges) {
+        CashFlowHighlightPlanner.yearlyDetailSnapshots(projection, highlightAges)
     }
+    val preRetirementDetailCount = remember(yearlyDetails, profile.retirementAge) {
+        yearlyDetails.count { it.age < profile.retirementAge }
+    }
+    val postRetirementDetailCount = yearlyDetails.size - preRetirementDetailCount
 
     var expandedIncomeAges by remember { mutableStateOf(setOf<Int>()) }
     var expandedTaxAges by remember { mutableStateOf(setOf<Int>()) }
-    var postRetirementExpanded by remember { mutableStateOf(false) }
+    var yearlyDetailExpanded by remember { mutableStateOf(false) }
 
     Card(
         modifier = modifier.fillMaxWidth(),
@@ -79,7 +84,8 @@ fun MonthlyCashFlowSummaryCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
-                text = "아래는 은퇴·연금·매각 등 전환 시점 위주 요약입니다. 월 수입·세금 열 탭 시 항목별 표시.",
+                text = "아래는 은퇴·연금·매각 등 전환 시점 위주 요약입니다. " +
+                    "나머지 연도는 「연도별 상세」에서 확인할 수 있습니다.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -131,52 +137,47 @@ fun MonthlyCashFlowSummaryCard(
                 )
             }
 
-            if (postRetirement.isNotEmpty()) {
+            if (yearlyDetails.isNotEmpty()) {
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 TextButton(
-                    onClick = { postRetirementExpanded = !postRetirementExpanded },
+                    onClick = { yearlyDetailExpanded = !yearlyDetailExpanded },
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Icon(
-                        imageVector = if (postRetirementExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        imageVector = if (yearlyDetailExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
                         contentDescription = null,
                     )
                     Text(
-                        text = if (postRetirementExpanded) {
-                            "은퇴 후 연도별 상세 접기 (${postRetirement.size}년)"
-                        } else {
-                            "은퇴 후 연도별 상세 펼치기 (${postRetirement.size}년)"
-                        },
+                        text = yearlyDetailToggleLabel(
+                            expanded = yearlyDetailExpanded,
+                            preCount = preRetirementDetailCount,
+                            postCount = postRetirementDetailCount,
+                        ),
                     )
                 }
-                AnimatedVisibility(visible = postRetirementExpanded) {
+                AnimatedVisibility(visible = yearlyDetailExpanded) {
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        postRetirement.forEach { snapshot ->
-                            val age = snapshot.age
-                            val index = snapshots.indexOfFirst { it.age == age }
-                            if (highlightRows.none { it.snapshot.age == age }) {
-                                MonthlyCashFlowBlock(
-                                    snapshot = snapshot,
-                                    previousSnapshot = snapshots.getOrNull(index - 1),
-                                    incomeExpanded = age in expandedIncomeAges,
-                                    taxExpanded = age in expandedTaxAges,
-                                    onToggleIncomeBreakdown = {
-                                        expandedIncomeAges = if (age in expandedIncomeAges) {
-                                            expandedIncomeAges - age
-                                        } else {
-                                            expandedIncomeAges + age
-                                        }
-                                    },
-                                    onToggleTaxBreakdown = {
-                                        expandedTaxAges = if (age in expandedTaxAges) {
-                                            expandedTaxAges - age
-                                        } else {
-                                            expandedTaxAges + age
-                                        }
-                                    },
-                                )
-                            }
-                        }
+                        YearlyDetailSnapshotList(
+                            details = yearlyDetails,
+                            snapshots = snapshots,
+                            retirementAge = profile.retirementAge,
+                            expandedIncomeAges = expandedIncomeAges,
+                            expandedTaxAges = expandedTaxAges,
+                            onToggleIncomeBreakdown = { age ->
+                                expandedIncomeAges = if (age in expandedIncomeAges) {
+                                    expandedIncomeAges - age
+                                } else {
+                                    expandedIncomeAges + age
+                                }
+                            },
+                            onToggleTaxBreakdown = { age ->
+                                expandedTaxAges = if (age in expandedTaxAges) {
+                                    expandedTaxAges - age
+                                } else {
+                                    expandedTaxAges + age
+                                }
+                            },
+                        )
                     }
                 }
             }
@@ -196,6 +197,93 @@ fun MonthlyCashFlowSummaryCard(
             )
         }
     }
+}
+
+private fun yearlyDetailToggleLabel(expanded: Boolean, preCount: Int, postCount: Int): String {
+    val action = if (expanded) "접기" else "펼치기"
+    val span = buildList {
+        if (preCount > 0) add("은퇴 전 ${preCount}년")
+        if (postCount > 0) add("은퇴 후 ${postCount}년")
+    }.joinToString(" · ")
+    return "연도별 상세 $action ($span)"
+}
+
+@Composable
+private fun YearlyDetailSnapshotList(
+    details: List<YearSnapshot>,
+    snapshots: List<YearSnapshot>,
+    retirementAge: Int,
+    expandedIncomeAges: Set<Int>,
+    expandedTaxAges: Set<Int>,
+    onToggleIncomeBreakdown: (Int) -> Unit,
+    onToggleTaxBreakdown: (Int) -> Unit,
+) {
+    val preRetirement = details.filter { it.age < retirementAge }
+    val postRetirement = details.filter { it.age >= retirementAge }
+
+    if (preRetirement.isNotEmpty()) {
+        Text(
+            text = "은퇴 전",
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        preRetirement.forEach { snapshot ->
+            YearlyDetailRow(
+                snapshot = snapshot,
+                snapshots = snapshots,
+                expandedIncomeAges = expandedIncomeAges,
+                expandedTaxAges = expandedTaxAges,
+                onToggleIncomeBreakdown = onToggleIncomeBreakdown,
+                onToggleTaxBreakdown = onToggleTaxBreakdown,
+            )
+        }
+    }
+    if (preRetirement.isNotEmpty() && postRetirement.isNotEmpty()) {
+        HorizontalDivider(
+            modifier = Modifier.padding(vertical = 4.dp),
+            color = MaterialTheme.colorScheme.outlineVariant,
+        )
+    }
+    if (postRetirement.isNotEmpty()) {
+        Text(
+            text = "은퇴 후",
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        postRetirement.forEach { snapshot ->
+            YearlyDetailRow(
+                snapshot = snapshot,
+                snapshots = snapshots,
+                expandedIncomeAges = expandedIncomeAges,
+                expandedTaxAges = expandedTaxAges,
+                onToggleIncomeBreakdown = onToggleIncomeBreakdown,
+                onToggleTaxBreakdown = onToggleTaxBreakdown,
+            )
+        }
+    }
+}
+
+@Composable
+private fun YearlyDetailRow(
+    snapshot: YearSnapshot,
+    snapshots: List<YearSnapshot>,
+    expandedIncomeAges: Set<Int>,
+    expandedTaxAges: Set<Int>,
+    onToggleIncomeBreakdown: (Int) -> Unit,
+    onToggleTaxBreakdown: (Int) -> Unit,
+) {
+    val age = snapshot.age
+    val index = snapshots.indexOfFirst { it.age == age }
+    MonthlyCashFlowBlock(
+        snapshot = snapshot,
+        previousSnapshot = snapshots.getOrNull(index - 1),
+        incomeExpanded = age in expandedIncomeAges,
+        taxExpanded = age in expandedTaxAges,
+        onToggleIncomeBreakdown = { onToggleIncomeBreakdown(age) },
+        onToggleTaxBreakdown = { onToggleTaxBreakdown(age) },
+    )
 }
 
 @Composable

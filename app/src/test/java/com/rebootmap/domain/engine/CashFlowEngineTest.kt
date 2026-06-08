@@ -24,6 +24,10 @@ class CashFlowEngineTest {
         healthInsuranceEnabled = false,
     )
 
+    /** Phase 9 이전 회귀 — 은퇴 전 생활비 미차감 시나리오 */
+    private fun UserProfile.legacyNoPreRetirementLiving() =
+        copy(currentMonthlyLivingExpense = 0L)
+
     private fun input(
         profile: UserProfile = UserProfile(),
         assumptions: EconomicAssumptions = EconomicAssumptions(),
@@ -158,7 +162,7 @@ class CashFlowEngineTest {
             retirementAge = 60,
             lifeExpectancy = 62,
             monthlyLivingExpense = 1_000_000L,
-        )
+        ).legacyNoPreRetirementLiving()
         val assets = listOf(
             Asset.SeverancePension(
                 balance = 10_000_000L,
@@ -199,7 +203,7 @@ class CashFlowEngineTest {
             retirementAge = 65,
             lifeExpectancy = 42,
             monthlyLivingExpense = 1_000_000L,
-        )
+        ).legacyNoPreRetirementLiving()
         val assets = listOf(
             Asset.Investment(currentValue = 100_000_000L, annualReturnRate = 0.07),
         )
@@ -217,6 +221,7 @@ class CashFlowEngineTest {
             retirementAge = 65,
             lifeExpectancy = 42,
             monthlyLivingExpense = 0L,
+            currentMonthlyLivingExpense = 0L,
         )
         val assets = listOf(
             Asset.CashSavings(maturityAmount = 30_000_000L, maturityYear = baseYear + 2),
@@ -235,6 +240,7 @@ class CashFlowEngineTest {
             retirementAge = 65,
             lifeExpectancy = 42,
             monthlyLivingExpense = 0L,
+            currentMonthlyLivingExpense = 0L,
         )
         val assets = listOf(
             Asset.RealEstate(currentValue = 500_000_000L, saleYear = baseYear + 1),
@@ -258,6 +264,7 @@ class CashFlowEngineTest {
             retirementAge = 65,
             lifeExpectancy = 46,
             monthlyLivingExpense = 0L,
+            currentMonthlyLivingExpense = 0L,
         )
         val assets = listOf(
             Asset.RealEstate(
@@ -452,6 +459,7 @@ class CashFlowEngineTest {
             retirementAge = 60,
             lifeExpectancy = 66,
             monthlyLivingExpense = 0L,
+            currentMonthlyLivingExpense = 0L,
         )
         val assets = listOf(
             Asset.NationalPension(monthlyPayout = 1_000_000L, startAge = 65),
@@ -467,22 +475,25 @@ class CashFlowEngineTest {
     }
 
     @Test
-    fun `T14 - 은퇴 전에는 생활비가 발생하지 않는다`() {
+    fun `T14 - 은퇴 전에는 현재 월 생활비가 차감된다`() {
         val profile = UserProfile(
             currentAge = 50,
             retirementAge = 60,
-            lifeExpectancy = 55,
+            lifeExpectancy = 62,
+            currentMonthlyLivingExpense = 2_000_000L,
             monthlyLivingExpense = 3_000_000L,
         )
         val assets = listOf(
-            Asset.Investment(currentValue = 10_000_000L, annualReturnRate = 0.0),
+            Asset.Investment(currentValue = 100_000_000L, annualReturnRate = 0.0),
         )
 
         val result = engine.project(input(profile = profile, assets = assets))
+        val preRetirement = result.yearlySnapshots.first { it.age == 50 }
+        val atRetirement = result.yearlySnapshots.first { it.age == 60 }
 
-        result.yearlySnapshots.forEach { snapshot ->
-            assertEquals(0L, snapshot.annualExpense)
-        }
+        assertEquals(24_000_000L, preRetirement.annualLivingExpense)
+        assertEquals(36_000_000L, atRetirement.annualLivingExpense)
+        assertEquals(76_000_000L, preRetirement.totalAssets)
     }
 
     @Test
@@ -492,6 +503,7 @@ class CashFlowEngineTest {
             retirementAge = 65,
             lifeExpectancy = 42,
             monthlyLivingExpense = 0L,
+            currentMonthlyLivingExpense = 0L,
         )
         val assets = listOf(
             Asset.RealEstate(
@@ -518,6 +530,7 @@ class CashFlowEngineTest {
             retirementAge = 65,
             lifeExpectancy = 42,
             monthlyLivingExpense = 0L,
+            currentMonthlyLivingExpense = 0L,
         )
         val assets = listOf(
             Asset.RealEstate(currentValue = 200_000_000L, saleYear = null),
@@ -602,6 +615,7 @@ class CashFlowEngineTest {
             retirementAge = 60,
             lifeExpectancy = 66,
             monthlyLivingExpense = 0L,
+            currentMonthlyLivingExpense = 0L,
         )
         val assets = listOf(
             Asset.SeverancePension(
@@ -633,6 +647,7 @@ class CashFlowEngineTest {
             retirementAge = 60,
             lifeExpectancy = 62,
             monthlyLivingExpense = 0L,
+            currentMonthlyLivingExpense = 0L,
         )
         val assets = listOf(
             Asset.YellowUmbrella(
@@ -682,6 +697,7 @@ class CashFlowEngineTest {
             retirementAge = 60,
             lifeExpectancy = 62,
             monthlyLivingExpense = 0L,
+            currentMonthlyLivingExpense = 0L,
         )
         val assets = listOf(
             Asset.EmploymentIncome(monthlyAmount = 2_000_000L, startAge = 60, endAge = 62),
@@ -704,6 +720,7 @@ class CashFlowEngineTest {
             retirementAge = 65,
             lifeExpectancy = 42,
             monthlyLivingExpense = 0L,
+            currentMonthlyLivingExpense = 0L,
         )
         val assets = listOf(
             Asset.RealEstate(
@@ -730,6 +747,7 @@ class CashFlowEngineTest {
             retirementAge = 65,
             lifeExpectancy = 67,
             monthlyLivingExpense = 0L,
+            currentMonthlyLivingExpense = 0L,
         )
         val assets = listOf(
             Asset.RealEstate(currentValue = 300_000_000L, saleYear = null),

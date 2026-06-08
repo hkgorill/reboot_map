@@ -18,7 +18,13 @@ class Phase8PersonalLoanTest {
 
     @Test
     fun `P8-T01 - 부채 잔액은 총자산에서 차감된다`() {
-        val profile = UserProfile(currentAge = 50, retirementAge = 60, lifeExpectancy = 52, monthlyLivingExpense = 0L)
+        val profile = UserProfile(
+            currentAge = 50,
+            retirementAge = 60,
+            lifeExpectancy = 52,
+            monthlyLivingExpense = 0L,
+            currentMonthlyLivingExpense = 0L,
+        )
         val assets = listOf(Asset.Investment(currentValue = 100_000_000L, annualReturnRate = 0.0))
         val loan = PersonalLoan(balance = 30_000_000L, annualInterestRate = 0.0, monthlyPayment = 0L)
 
@@ -48,7 +54,13 @@ class Phase8PersonalLoanTest {
 
     @Test
     fun `P8-T02 - 월 상환은 순자산과 현금흐름에 반영된다`() {
-        val profile = UserProfile(currentAge = 50, retirementAge = 60, lifeExpectancy = 52, monthlyLivingExpense = 0L)
+        val profile = UserProfile(
+            currentAge = 50,
+            retirementAge = 60,
+            lifeExpectancy = 52,
+            monthlyLivingExpense = 0L,
+            currentMonthlyLivingExpense = 0L,
+        )
         val assets = listOf(Asset.Investment(currentValue = 50_000_000L, annualReturnRate = 0.0))
         val loan = PersonalLoan(balance = 10_000_000L, annualInterestRate = 0.0, monthlyPayment = 500_000L)
         val assumptions = EconomicAssumptions(

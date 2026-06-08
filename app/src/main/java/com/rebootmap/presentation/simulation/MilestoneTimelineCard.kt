@@ -12,7 +12,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material.icons.outlined.Event
 import androidx.compose.material.icons.outlined.ChevronLeft
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material3.Button
@@ -38,7 +37,6 @@ import androidx.compose.ui.unit.dp
 import com.rebootmap.domain.matching.AssetSuggestion
 import com.rebootmap.domain.milestone.ExpenseCategory
 import com.rebootmap.domain.milestone.LumpSumExpense
-import com.rebootmap.presentation.components.ExpandableCard
 import com.rebootmap.presentation.components.IntInputField
 import com.rebootmap.presentation.components.coerceIntPreservingZero
 import com.rebootmap.presentation.components.ManWonInputField
@@ -51,26 +49,16 @@ fun MilestoneTimelineCard(
     expenses: List<LumpSumExpense>,
     expenseMatches: Map<String, List<AssetSuggestion>>,
     currentAge: Int,
-    expanded: Boolean,
-    onToggle: () -> Unit,
     onAdd: (LumpSumExpense) -> Unit,
     onUpdate: (LumpSumExpense) -> Unit,
     onRemove: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val currentYear = Year.now().value
-    val summary = when {
-        expenses.isEmpty() -> "지출 이벤트 없음"
-        else -> "${expenses.size}건 · 총 ${formatKoreanMan(expenses.sumOf { it.amount })}"
-    }
 
-    ExpandableCard(
-        title = "목돈 지출 타임라인",
-        summary = summary,
-        icon = Icons.Outlined.Event,
-        expanded = expanded,
-        onToggle = onToggle,
-        modifier = modifier,
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text(
             text = "결혼·교육·주거 등 대형 지출을 연도별로 배치하면 현금흐름·차트에 반영됩니다.",
@@ -310,10 +298,12 @@ private fun AddMilestoneForm(
         supportingText = "현재 ${currentYear}년 · ± 버튼으로 기존 항목 연도 조정",
     )
 
+    val canAdd = amount > 0 && (category != null || label.isNotBlank())
+
     Button(
         onClick = {
-            val selectedCategory = category ?: return@Button
             if (amount <= 0) return@Button
+            val selectedCategory = category ?: ExpenseCategory.OTHER
             val safeYear = year.coerceIn(currentYear, currentYear + (100 - currentAge))
             onAdd(
                 LumpSumExpense(
@@ -328,7 +318,7 @@ private fun AddMilestoneForm(
             amount = 0L
             year = currentYear + 5
         },
-        enabled = amount > 0 && category != null,
+        enabled = canAdd,
         modifier = Modifier.fillMaxWidth(),
     ) {
         Icon(Icons.Outlined.Add, contentDescription = null)

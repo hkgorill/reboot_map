@@ -254,7 +254,8 @@ object SimulationPdfExporter {
 
         lines += "현재 ${profile.currentAge}세 · 목표 은퇴 ${profile.retirementAge}세"
 
-        lines += "목표 월 생활비: ${formatKoreanMan(profile.monthlyLivingExpense)}"
+        lines += "현재 월 생활비: ${formatKoreanMan(profile.currentMonthlyLivingExpense)} (은퇴 전)"
+        lines += "목표 월 생활비: ${formatKoreanMan(profile.monthlyLivingExpense)} (은퇴 후)"
 
         if (profile.lifeExpectancy > profile.currentAge) {
 
@@ -480,7 +481,7 @@ object SimulationPdfExporter {
 
         appendHighlightCashFlow(lines, projection, profile, assets)
 
-        appendPostRetirementTable(lines, projection, profile.retirementAge)
+        appendYearlyDetailTable(lines, projection, profile, assets)
 
     }
 
@@ -522,35 +523,67 @@ object SimulationPdfExporter {
 
 
 
-    private fun appendPostRetirementTable(
+    private fun appendYearlyDetailTable(
 
         lines: MutableList<String>,
 
         projection: CashFlowProjection,
 
-        retirementAge: Int,
+        profile: com.rebootmap.domain.model.UserProfile,
+
+        assets: List<Asset>,
 
     ) {
 
-        val postRetirement = CashFlowHighlightPlanner.postRetirementSnapshots(projection, retirementAge)
+        val details = CashFlowHighlightPlanner.yearlyDetailSnapshots(projection, profile, assets)
 
-        if (postRetirement.isEmpty()) return
+        if (details.isEmpty()) return
 
+        val preCount = details.count { it.age < profile.retirementAge }
 
+        val postCount = details.size - preCount
 
-        lines += "## 은퇴 후 연도별 상세 (${postRetirement.size}년)"
+        lines += "## 연도별 상세 (은퇴 전 ${preCount}년 · 은퇴 후 ${postCount}년)"
 
         lines += "연도(나이) · 월 정기수입 · 월 생활비 · 월 세금 · 월 순현금 (일시 유입 있으면 별도 표기)"
 
-        postRetirement.forEach { snapshot ->
+        val preRetirement = details.filter { it.age < profile.retirementAge }
 
-            lines += CashFlowTableFormat.compactLine(snapshot)
+        val postRetirement = details.filter { it.age >= profile.retirementAge }
 
-            if (snapshot.taxBreakdown.hasAnyTax() || snapshot.annualHoldingCost.hasAnyHolding()) {
+        if (preRetirement.isNotEmpty()) {
 
-                appendTaxBreakdownLines(lines, snapshot.taxBreakdown, snapshot.annualHoldingCost)
+            lines += "[은퇴 전]"
 
-            }
+            preRetirement.forEach { appendYearlyDetailSnapshot(lines, it) }
+
+        }
+
+        if (preRetirement.isNotEmpty() && postRetirement.isNotEmpty()) {
+
+            lines += "---"
+
+        }
+
+        if (postRetirement.isNotEmpty()) {
+
+            lines += "[은퇴 후]"
+
+            postRetirement.forEach { appendYearlyDetailSnapshot(lines, it) }
+
+        }
+
+    }
+
+
+
+    private fun appendYearlyDetailSnapshot(lines: MutableList<String>, snapshot: YearSnapshot) {
+
+        lines += CashFlowTableFormat.compactLine(snapshot)
+
+        if (snapshot.taxBreakdown.hasAnyTax() || snapshot.annualHoldingCost.hasAnyHolding()) {
+
+            appendTaxBreakdownLines(lines, snapshot.taxBreakdown, snapshot.annualHoldingCost)
 
         }
 

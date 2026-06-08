@@ -10,6 +10,8 @@ data class SimulationPersistedState(
     val currentAge: Int = 40,
     val retirementAge: Int = 60,
     val lifeExpectancy: Int = 90,
+    /** null이면 레거시 — [monthlyLivingExpense]와 동일하게 복원 */
+    val currentMonthlyLivingExpense: Long? = null,
     val monthlyLivingExpense: Long = 3_000_000L,
     val inflationRate: Double = 0.02,
     /** [com.rebootmap.domain.model.LivingExpenseInflationBase] 이름 */

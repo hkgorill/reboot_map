@@ -75,6 +75,7 @@ object SimulationStateMapper {
 
             lifeExpectancy = state.profile.lifeExpectancy,
 
+            currentMonthlyLivingExpense = state.profile.currentMonthlyLivingExpense,
             monthlyLivingExpense = state.profile.monthlyLivingExpense,
 
             inflationRate = assumptions.inflationRate,
@@ -253,6 +254,8 @@ object SimulationStateMapper {
 
                 lifeExpectancy = persisted.lifeExpectancy,
 
+                currentMonthlyLivingExpense = persisted.currentMonthlyLivingExpense
+                    ?: persisted.monthlyLivingExpense,
                 monthlyLivingExpense = persisted.monthlyLivingExpense,
 
             ),

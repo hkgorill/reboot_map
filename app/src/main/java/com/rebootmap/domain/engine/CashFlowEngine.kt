@@ -296,7 +296,11 @@ class CashFlowEngine {
                     ),
                 )
             } else {
-                0L
+                inflatedAnnualExpense(
+                    monthlyExpense = profile.currentMonthlyLivingExpense,
+                    inflationRate = assumptions.inflationRate,
+                    inflationYears = year - startYear,
+                )
             }
 
             val countedEstates = RealEstatePortfolioEngine.ownedEstates(

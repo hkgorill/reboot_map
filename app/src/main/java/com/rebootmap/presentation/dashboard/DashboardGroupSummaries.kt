@@ -64,8 +64,9 @@ object DashboardGroupSummaries {
         }.joinToString("·").ifEmpty { "세금 OFF" }
 
         return DashboardGroupSummary(
-            headline = "${profile.currentAge}세 → ${profile.retirementAge}세 은퇴 · 월 ${formatKoreanMan(profile.monthlyLivingExpense)}",
+            headline = "${profile.currentAge}세 → ${profile.retirementAge}세 은퇴",
             detailLines = listOf(
+                "현재 월 ${formatKoreanMan(profile.currentMonthlyLivingExpense)} · 은퇴 후 월 ${formatKoreanMan(profile.monthlyLivingExpense)}",
                 "기대 수명 ${profile.lifeExpectancy}세 · 물가 ${"%.1f".format(assumptions.inflationRate * 100)}% · $expenseBase",
                 taxOn,
             ),

@@ -29,7 +29,6 @@ data class SimulationUiState(
     val expandedLoanIds: Set<String> = emptySet(),
     val expandedDashboardGroups: Set<DashboardGroupId> = setOf(DashboardGroupId.RESULTS),
     val isTimingConsultExpanded: Boolean = false,
-    val isMilestoneExpanded: Boolean = false,
     val isLoading: Boolean = true,
 ) {
     val investmentAsset: Asset.Investment?
@@ -58,6 +57,7 @@ data class SimulationUiState(
                     currentAge = currentAge,
                     retirementAge = retirementAge,
                     lifeExpectancy = 0,
+                    currentMonthlyLivingExpense = preset.profile.monthlyLivingExpense,
                     monthlyLivingExpense = monthlyLivingExpense,
                 ),
                 assumptions = EconomicAssumptions(inflationRate = 0.0),

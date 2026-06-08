@@ -59,6 +59,31 @@ class CashFlowHighlightPlannerTest {
         assertEquals(listOf(60, 61), post.map { it.age })
     }
 
+    @Test
+    fun `yearlyDetailSnapshots는 요약에 없는 은퇴 전·후 연도를 모두 포함한다`() {
+        val profile = UserProfile(currentAge = 58, retirementAge = 60, lifeExpectancy = 62)
+        val projection = CashFlowProjection(
+            yearlySnapshots = listOf(
+                snap(2026, 58),
+                snap(2027, 59),
+                snap(2028, 60),
+                snap(2029, 61),
+                snap(2030, 62),
+            ),
+            depletionYear = null,
+            deficitYears = emptyList(),
+        )
+
+        val highlights = CashFlowHighlightPlanner.highlights(projection, profile)
+        val details = CashFlowHighlightPlanner.yearlyDetailSnapshots(projection, profile)
+
+        assertTrue(highlights.any { it.snapshot.age == 58 })
+        assertTrue(highlights.any { it.snapshot.age == 60 })
+        assertEquals(listOf(59, 61), details.map { it.age })
+        assertEquals(1, details.count { it.age < profile.retirementAge })
+        assertEquals(1, details.count { it.age >= profile.retirementAge })
+    }
+
     private fun snap(year: Int, age: Int, income: AnnualIncomeBreakdown = AnnualIncomeBreakdown()) =
         YearSnapshot(
             year = year,
